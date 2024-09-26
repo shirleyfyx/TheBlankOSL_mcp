@@ -2,5 +2,5 @@
 	path = TheBlankOSL_LLM_Client
 	url = https://github.com/Vertex-Research/TheBlankOSL_LLM_Client
 [submodule "TheBlankOSL_LLM_UI"]
-	path = TheBlankOSL_LLM_UI
+	path = TheBlankOSL_UI
 	url = https://github.com/Vertex-Research/TheBlankOSL_UI
