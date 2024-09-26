@@ -3,6 +3,6 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/TheBlankOSL_LLM_Client" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/TheBlankOSL_LLM_UI" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/TheBlankOSL_UI" vcs="Git" />
   </component>
 </project>
