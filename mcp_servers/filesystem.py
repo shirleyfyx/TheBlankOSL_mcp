@@ -1,10 +1,11 @@
+from mcp.server.fastmcp import FastMCP
 from typing import List, Union
 from pathlib import Path
 import os
 import shutil
 import aiofiles
 import anyio
-from mcp.server.fastmcp import FastMCP
+import platform
 
 # Initialize MCP server
 mcp = FastMCP("filesystem")
@@ -195,6 +196,26 @@ async def touch(path: PathLike) -> None:
     """
     await anyio.to_thread.run_sync(Path(path).touch)
 
+'''
+Supplementary tools to help guiding LLM identifying the OS information.
+'''
+@mcp.tool()
+async def get_home_directory() -> str:
+    """Return the path of the current user's home directory.
+
+    Returns:
+        str: Absolute path to the home directory.
+    """
+    return os.path.expanduser("~")
+
+@mcp.tool()
+async def get_os() -> str:
+    """Return the name of the current operating system.
+
+    Returns:
+        str: OS name (e.g., 'Windows', 'Linux', 'Darwin' for macOS).
+    """
+    return platform.system()
 
 if __name__ == "__main__":
     # Initialize and run the server
