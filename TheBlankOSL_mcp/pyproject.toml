@@ -1,0 +1,17 @@
+[project]
+name = "theblankosl"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aiofiles>=24.1.0",
+    "anyio>=4.10.0",
+    "google-api-python-client>=2.182.0",
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.14.1",
+    "pillow>=11.3.0",
+    "pyautogui>=0.9.54",
+    "python-dotenv>=1.1.1",
+    "requests>=2.32.5",
+]
