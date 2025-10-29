@@ -54,6 +54,36 @@ async def is_dir(path: PathLike) -> bool:
     """
     return Path(path).is_dir()
 
+@mcp.tool()
+async def search_files(directory: PathLike, pattern: str, recursive: bool = True) -> List[str]:
+    """Search for files matching a pattern within a directory.
+
+    Args:
+        directory: The base directory to search in.
+        pattern: Filename pattern to match (e.g., '*.txt', 'data_*.csv').
+        recursive: If True, search recursively through subdirectories (default True).
+
+    Returns:
+        List of matching file paths (as strings).
+
+    Raises:
+        FileNotFoundError: If the directory does not exist.
+        NotADirectoryError: If the given path is not a directory.
+    """
+    dir_path = Path(directory)
+    if not dir_path.exists():
+        raise FileNotFoundError(f"Directory not found: {directory}")
+    if not dir_path.is_dir():
+        raise NotADirectoryError(f"Not a directory: {directory}")
+
+    def _search() -> List[str]:
+        if recursive:
+            return [str(p.resolve()) for p in dir_path.rglob(pattern)]
+        else:
+            return [str(p.resolve()) for p in dir_path.glob(pattern)]
+
+    return await anyio.to_thread.run_sync(_search)
+
 
 @mcp.tool()
 async def read_file(path: PathLike, encoding: str = "utf-8") -> str:
