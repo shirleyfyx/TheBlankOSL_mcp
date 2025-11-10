@@ -1,12 +1,10 @@
 import os
 import tempfile
-from io import BytesIO
-
 import pdfkit
 from mcp.server.fastmcp import FastMCP
-from pypdf import PdfReader, PdfWriter
+from PyPDF2 import PdfReader, PdfWriter
+from PyPDF2.generic import NameObject, BooleanObject
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import Paragraph
@@ -434,63 +432,58 @@ def add_image_to_page(pdf_path: str, output_path: str, page_number: int, image_p
         return f"Image added successfully to page {page_number}: {output_path}"
     except Exception as e:
         return f"An error occurred: {e}"
-    
+
+
 @mcp.tool()
 def read_form_fields(pdf_path: str) -> dict:
     """
-    Reads all interactive form fields in a PDF.
+    Retrieves the form fields from a pdf to then be stored as a dictionary
 
     Args:
         pdf_path: Path to the PDF file.
 
     Returns:
         Dictionary of form fields: {field_name: value}
-        Returns empty dict if no fields or file not found.
     """
-    try:
-        if not os.path.exists(pdf_path):
-            return {}
+    reader = PdfReader(pdf_path)
+    return reader.get_fields()
 
-        reader = PdfReader(pdf_path)
-        fields = reader.get_fields() or {}
-        # Extract field values
-        return {name: field.get('/V', '') for name, field in fields.items()}
-    except Exception:
-        return {}
-    
 @mcp.tool()
-def fill_form_fields(pdf_path: str, output_path: str, field_data: dict) -> str:
+def fill_form_all_pages(input_pdf, output_pdf, data_dict):
     """
-    Fills interactive form fields in a PDF.
+    Fills a PDF form, ensures all fields across all pages are visible, 
+    and saves the new file.
 
     Args:
-        pdf_path: Path to the input PDF.
-        output_path: Path to save the filled PDF.
-        field_data: Dictionary of field names and values to fill.
-
-    Returns:
-        Success or error message.
+        input_pdf_path (str): The path to the template PDF form.
+        output_pdf_path (str): The path where the filled PDF will be saved.
+        form_data (dict): A dictionary where keys are the field names in the PDF 
+                          and values are the data to input.
     """
-    try:
-        if not os.path.exists(pdf_path):
-            return f"Error: PDF not found at {pdf_path}"
+    reader = PdfReader(input_pdf)
+    writer = PdfWriter()
 
-        reader = PdfReader(pdf_path)
-        writer = PdfWriter()
+    # 1. Add ALL pages from the reader to the writer
+    # This loop ensures every page is available for processing
+    for page in reader.pages:
+        writer.add_page(page)
 
-        for page in reader.pages:
-            writer.add_page(page)
+    # 2. Update form fields across ALL pages contained within the writer
+    # The first argument 'writer.pages' refers to all pages we just added.
+    # pypdf automatically handles finding the fields regardless of which page they are on.
+    writer.update_page_form_field_values(
+        writer.pages, data_dict
+    )
+    
+    # 3. CRITICAL STEP FOR VISIBILITY:
+    # Set the /NeedAppearances flag to True. 
+    # This property is applied to the document catalog (AcroForm) level, 
+    # affecting the entire document and all fields within it.
+    writer.need_appearances = True 
 
-        # Update the form fields
-        writer.update_page_form_field_values(writer.pages[0], field_data)
-
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        with open(output_path, "wb") as f:
-            writer.write(f)
-
-        return f"Form fields filled successfully: {output_path}"
-    except Exception as e:
-        return f"An error occurred: {e}"
+    # 4. Write the output PDF
+    with open(output_pdf, "wb") as output_file:
+        writer.write(output_file)
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
