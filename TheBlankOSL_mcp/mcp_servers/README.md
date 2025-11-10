@@ -4,7 +4,7 @@ This repository contains all the mcp servers. If you want to add a new feature t
 ## Getting Started
 Before running any server, ensure that your environement is set up correctly.
 
-Follow the official MCP [documentation](https://modelcontextprotocol.io/docs/develop/build-server#claude-for-desktop-integration-issues) for installation and setup.
+Follow the official MCP [documentation](https://modelcontextprotocol.io/docs/develop/build-server) for installation and setup.
 
 ## Running a Server
 Each server runs independently. Navigate into the server’s directory and use the appropriate command:
