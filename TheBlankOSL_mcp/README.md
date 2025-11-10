@@ -33,6 +33,7 @@
 ## Installing Requirements
 Once the virtual environment is activated, install the required packages by running:
 ```bash
-pip install -r requirements.txt
+uv pip install -r requirements.txt
+# pip install -r requirements.txt
 ```
 This will install all the necessary dependencies for the project.
