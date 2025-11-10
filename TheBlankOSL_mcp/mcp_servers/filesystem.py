@@ -1,3 +1,4 @@
+import tempfile
 from mcp.server.fastmcp import FastMCP
 from typing import List, Union
 from pathlib import Path
@@ -246,6 +247,18 @@ async def get_os() -> str:
         str: OS name (e.g., 'Windows', 'Linux', 'Darwin' for macOS).
     """
     return platform.system()
+
+@mcp.tool()
+async def get_temporary_directory_auto() -> str:
+    """
+    Creates a temporary directory that is automatically cleaned up 
+    when the Python process ends or the object is garbage collected.
+
+    Returns:
+        Path to the temporary directory as a string.
+    """
+    temp_dir_obj = tempfile.TemporaryDirectory()
+    return temp_dir_obj.name
 
 if __name__ == "__main__":
     # Initialize and run the server
