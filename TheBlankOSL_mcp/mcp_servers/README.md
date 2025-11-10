@@ -7,7 +7,7 @@ Before running any server, ensure that your environement is set up correctly.
 Follow the official MCP [documentation](https://modelcontextprotocol.io/docs/develop/build-server) for installation and setup.
 
 ## Running a Server
-Each server runs independently. Navigate into the server’s directory and use the appropriate command:
+Navigate into the server’s directory and use the appropriate command:
 ```bash
 uv run server.py
 ```
