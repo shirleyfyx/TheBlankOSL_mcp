@@ -294,21 +294,29 @@ def extract_text(pdf_path: str, page_number: int) -> str:
         return ""
     
 @mcp.tool()
-def add_text_to_page_wrapped(pdf_path: str, output_path: str, page_number: int, text: str,
-                             x: float = 50, top_margin: float = 50,
-                             font_name: str = "Times-Roman", font_size: int = 12) -> str:
+def add_text_list_to_page(pdf_path: str, output_path: str, page_number: int,
+                          lines: list[str],
+                          x: float = 50,
+                          top_margin: float = 72,
+                          font_name: str = "Times-Roman",
+                          font_size: int = 12,
+                          right_margin: float = 50,
+                          line_spacing: float = 1.2) -> str:
     """
-    Adds text to an existing PDF page, wrapping lines automatically, starting from top-left.
+    Adds a list of strings to an existing PDF page, each string starting on a new line,
+    and wraps long lines automatically.
 
     Args:
         pdf_path: Input PDF file path.
         output_path: Output PDF file path.
         page_number: Page number to add text (1-indexed).
-        text: Text to add.
+        lines: List of strings to add.
         x: Distance from left edge (in points).
-        top_margin: Distance from top edge (in points).
+        top_margin: Distance from top edge (in points). Standard 1 inch = 72 pts.
         font_name: Font name (default Times-Roman).
         font_size: Font size (default 12).
+        right_margin: Distance from right edge (in points).
+        line_spacing: Line spacing multiplier.
 
     Returns:
         Success or error message.
@@ -321,24 +329,31 @@ def add_text_to_page_wrapped(pdf_path: str, output_path: str, page_number: int, 
         if page_number < 1 or page_number > len(reader.pages):
             return f"Error: Page number {page_number} is out of range"
 
-        page_width = float(reader.pages[page_number - 1].mediabox.width)
-        page_height = float(reader.pages[page_number - 1].mediabox.height)
-        y = page_height - top_margin  # start from top-left
+        page = reader.pages[page_number - 1]
+        page_width = float(page.mediabox.width)
+        page_height = float(page.mediabox.height)
+
+        y_start = page_height - top_margin  # start from standard top margin
 
         # Create temporary PDF with wrapped text
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             c = canvas.Canvas(tmp_file.name, pagesize=(page_width, page_height))
             c.setFont(font_name, font_size)
 
-            # Wrap text manually using Paragraph
             style = getSampleStyleSheet()['Normal']
             style.fontName = font_name
             style.fontSize = font_size
-            para = Paragraph(text, style)
 
-            max_width = page_width - x - 50  # leave 50 points margin on right
-            para.wrapOn(c, max_width, page_height)
-            para.drawOn(c, x, y)
+            max_width = page_width - x - right_margin
+            y = y_start
+
+            for line in lines:
+                para = Paragraph(line, style)
+                w, h = para.wrap(max_width, page_height)
+                # Draw paragraph
+                para.drawOn(c, x, y - h)
+                # Move y down for next line
+                y -= h * line_spacing
 
             c.save()
 
@@ -347,10 +362,10 @@ def add_text_to_page_wrapped(pdf_path: str, output_path: str, page_number: int, 
             stamp_page = stamp_reader.pages[0]
 
             writer = PdfWriter()
-            for i, page in enumerate(reader.pages, start=1):
+            for i, p in enumerate(reader.pages, start=1):
                 if i == page_number:
-                    page.merge_page(stamp_page)
-                writer.add_page(page)
+                    p.merge_page(stamp_page)
+                writer.add_page(p)
 
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             with open(output_path, "wb") as f:
@@ -358,6 +373,7 @@ def add_text_to_page_wrapped(pdf_path: str, output_path: str, page_number: int, 
 
         os.remove(tmp_file.name)
         return f"Text added successfully to page {page_number}: {output_path}"
+
     except Exception as e:
         return f"An error occurred: {e}"
 
