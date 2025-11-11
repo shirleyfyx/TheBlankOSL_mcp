@@ -1,10 +1,12 @@
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 import os
 
 # Load environment variables
@@ -21,6 +23,7 @@ mcp = FastMCP("email")
 
 @dataclass
 class EmailResult:
+    """Result object returned after sending an email."""
     success: bool
     message: str
     from_email: str
@@ -37,22 +40,34 @@ async def send_email(
     smtp_username: Optional[str] = None,
     smtp_password: Optional[str] = None,
     smtp_server: Optional[str] = None,
-    smtp_port: Optional[int] = None
+    smtp_port: Optional[int] = None,
+    attachments: Optional[List[str]] = None
 ) -> EmailResult:
-    """Send an email via SMTP.
+    """
+    Send an email via SMTP, optionally with attachments.
 
     Args:
-        to_email: Recipient email address
-        subject: Email subject
-        body: Email body (plain text)
-        from_email: Sender email address (optional, defaults to smtp_username or env variable)
-        smtp_username: SMTP username (optional, defaults to env variable)
-        smtp_password: SMTP password (optional, defaults to env variable)
-        smtp_server: SMTP server address (optional, defaults to env variable or smtp.gmail.com)
-        smtp_port: SMTP port (optional, defaults to env variable or 587)
+        to_email (str): Recipient email address.
+        subject (str): Email subject line.
+        body (str): Email body in plain text.
+        from_email (str, optional): Sender email address. Defaults to SMTP username or environment variable.
+        smtp_username (str, optional): SMTP login username. Defaults to environment variable SMTP_USERNAME.
+        smtp_password (str, optional): SMTP login password. Defaults to environment variable SMTP_PASSWORD.
+        smtp_server (str, optional): SMTP server hostname. Defaults to environment variable SMTP_SERVER or "smtp.gmail.com".
+        smtp_port (int, optional): SMTP server port. Defaults to environment variable SMTP_PORT or 587.
+        attachments (List[str], optional): List of local file paths to attach. If a file is missing, email sending fails.
 
     Returns:
-        EmailResult object with send status
+        EmailResult: Dataclass with the following fields:
+            - success (bool): True if email was sent successfully, False otherwise.
+            - message (str): Human-readable success or error message.
+            - from_email (str): Sender email address.
+            - to_email (str): Recipient email address.
+            - subject (str): Email subject.
+            - error (str, optional): Detailed error message if sending failed.
+
+    Raises:
+        None: Errors are captured and returned in the EmailResult object instead of raising exceptions.
     """
     # Use defaults from environment if not provided
     username = smtp_username or DEFAULT_SMTP_USERNAME
@@ -79,6 +94,29 @@ async def send_email(
         message["Subject"] = subject
         message.attach(MIMEText(body, "plain"))
 
+        # Attach files if any
+        if attachments:
+            for file_path in attachments:
+                if os.path.isfile(file_path):
+                    with open(file_path, "rb") as f:
+                        part = MIMEBase("application", "octet-stream")
+                        part.set_payload(f.read())
+                        encoders.encode_base64(part)
+                        part.add_header(
+                            "Content-Disposition",
+                            f'attachment; filename="{os.path.basename(file_path)}"'
+                        )
+                        message.attach(part)
+                else:
+                    return EmailResult(
+                        success=False,
+                        message=f"Attachment not found: {file_path}",
+                        from_email=sender,
+                        to_email=to_email,
+                        subject=subject,
+                        error="File does not exist"
+                    )
+
         # Connect to SMTP server and send email
         with smtplib.SMTP(server, port) as smtp_conn:
             smtp_conn.starttls()  # Enable TLS encryption
@@ -93,7 +131,7 @@ async def send_email(
             subject=subject
         )
 
-    except smtplib.SMTPAuthenticationError as e:
+    except smtplib.SMTPAuthenticationError:
         return EmailResult(
             success=False,
             message="Authentication failed",
