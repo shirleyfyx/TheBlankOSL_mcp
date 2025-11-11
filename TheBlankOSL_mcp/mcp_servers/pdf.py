@@ -37,35 +37,35 @@ def create_blank_pdf(output_path: str, num_pages: int = 1, width: float = 612, h
     except Exception as e:
         return f"An error occurred: {e}"
     
-@mcp.tool()
-def create_pdf_from_html(output_path: str, html: str = None, url: str = None) -> str:
-    """
-    Creates a PDF from raw HTML content or a web page URL.
+# @mcp.tool()
+# def create_pdf_from_html(output_path: str, html: str = None, url: str = None) -> str:
+#     """
+#     Creates a PDF from raw HTML content or a web page URL.
 
-    Args:
-        output_path: Path to save the PDF.
-        html: Raw HTML content to render into PDF. (Optional)
-        url: URL of a web page to convert to PDF. (Optional)
+#     Args:
+#         output_path: Path to save the PDF.
+#         html: Raw HTML content to render into PDF. (Optional)
+#         url: URL of a web page to convert to PDF. (Optional)
 
-    Returns:
-        Success or error message.
-    """
-    try:
-        if not html and not url:
-            return "Error: Provide either html content or a url."
+#     Returns:
+#         Success or error message.
+#     """
+#     try:
+#         if not html and not url:
+#             return "Error: Provide either html content or a url."
 
-        # Ensure output directory exists
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+#         # Ensure output directory exists
+#         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        # Convert HTML or URL to PDF
-        if html:
-            pdfkit.from_string(html, output_path)
-        else:
-            pdfkit.from_url(url, output_path)
+#         # Convert HTML or URL to PDF
+#         if html:
+#             pdfkit.from_string(html, output_path)
+#         else:
+#             pdfkit.from_url(url, output_path)
 
-        return f"PDF successfully created at {output_path}"
-    except Exception as e:
-        return f"An error occurred: {e}"
+#         return f"PDF successfully created at {output_path}"
+#     except Exception as e:
+#         return f"An error occurred: {e}"
     
 @mcp.tool()
 def merge_pdfs(pdf_paths: list[str], output_path: str) -> str:
