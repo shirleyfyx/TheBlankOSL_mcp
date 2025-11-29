@@ -2,6 +2,8 @@ from mcp.server.fastmcp import FastMCP
 from typing import List, Optional
 import psutil
 import anyio
+import subprocess
+import time
 
 # Initialize MCP server
 mcp = FastMCP("process_manager")
@@ -65,16 +67,49 @@ async def start_process(command: list[str] | str) -> dict:
             "message": "Process started successfully"
         }
     """
-    import subprocess
+
+    TIMEOUT = 5.0
+    POLL_INTERVAL = 0.05
+
+    def _find_new_process(exe_name=None, before_pids=None, timeout=TIMEOUT, poll_interval=POLL_INTERVAL):
+        """Poll for a new process not present in before_pids. Optionally filter by exe_name."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            for p in psutil.process_iter(["pid", "name", "exe", "create_time", "cmdline"]):
+                pid = p.info["pid"]
+                if before_pids and pid in before_pids:
+                    continue
+                if exe_name:
+                    # match by name or full exe path if available
+                    name = (p.info.get("name") or "").lower()
+                    exe = (p.info.get("exe") or "").lower()
+                    if exe_name.lower() not in (name, exe):
+                        continue
+                # found a candidate
+                return p
+            time.sleep(poll_interval)
+        return None
 
     def _start():
         if isinstance(command, str):
-            # Run in shell mode if string
-            proc = subprocess.Popen(command, shell=True)
+            exe_name = command
         else:
-            # Run list of args
-            proc = subprocess.Popen(command)
-        return {"pid": proc.pid, "message": "Process started successfully"}
+            exe_name = "".join(command)
+
+        # snapshot existing processes
+        before = {p.pid for p in psutil.process_iter()}
+        start_time = time.time()
+
+        # launch (don't force shell unless you need it)
+        proc = subprocess.Popen(command, shell=isinstance(command, str))
+        # Immediately try to find a new process that wasn't present before
+        new_proc = _find_new_process(exe_name=exe_name, before_pids=before, timeout=TIMEOUT)
+        if new_proc:
+            return new_proc.pid, new_proc
+            
+        # fallback: maybe the process is a child of the Popen that exited quickly (rare), try by cmdline
+        # final fallback: return the Popen pid (may be shell)
+        return proc.pid, None
 
     return await anyio.to_thread.run_sync(_start)
 
