@@ -19,7 +19,7 @@ DEFAULT_SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
 DEFAULT_SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
 # Initialize MCP server
-mcp = FastMCP("email")
+mcp = FastMCP("email_manager")
 
 @dataclass
 class EmailResult:
