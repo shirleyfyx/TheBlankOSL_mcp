@@ -5,31 +5,32 @@
 
 ## Setting Dev Environment with Docker (New Setup)
 
-### Build the Docker Image
+### 1. Start the Shared Container
 1. Open your terminal and navigate to the project directory.
-2. Build the Docker image by running:
+2. Run the startup script (this builds the image and starts the container):
    ```bash
-   docker build -t mcp-server .
+   ./start_docker.sh
    ```
-3. Make sure to have the `Dockerfile` in the root directory of the project.
+   *Note: You only need to run this once to start the background container.*
 
-4. Modify the `claude_desktop_config.json` file to look something like this for all the servers:
+### 2. Configure Claude Desktop
+Modify your `claude_desktop_config.json` to connect to the running container using `docker exec`.
+You can copy the configuration from `TheBlankOSL_mcp/mcp_client/claude_desktop_config.json`.
+
+Example entry:
 ```json
 {
   "mcpServers": {
     "weather": {
       "command": "docker",
       "args": [
-        "run",
+        "exec",
         "-i",
-        "--rm",
-        "-v",
-        "/Users/design-team-23:/app",
-        "mcp-server",
+        "mcp-shared",
         "python",
         "TheBlankOSL_mcp/mcp_servers/weather.py"
       ]
-    },
+    }
   }
 }
 ```
