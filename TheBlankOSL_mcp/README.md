@@ -3,7 +3,40 @@
 ## Prerequisites
 - Python 3.13 or above must be installed on your system.
 
-## Setting Up the Virtual Environment
+## Setting Dev Environment with Docker (New Setup)
+
+### Build the Docker Image
+1. Open your terminal and navigate to the project directory.
+2. Build the Docker image by running:
+   ```bash
+   docker build -t mcp-server .
+   ```
+3. Make sure to have the `Dockerfile` in the root directory of the project.
+
+4. Modify the `claude_desktop_config.json` file to look something like this for all the servers:
+```json
+{
+  "mcpServers": {
+    "weather": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "/Users/design-team-23:/app",
+        "mcp-server",
+        "python",
+        "TheBlankOSL_mcp/mcp_servers/weather.py"
+      ]
+    },
+  }
+}
+```
+
+
+
+## Setting Up the Virtual Environment (Old Setup)
 
 ### Using `venv`
 1. Open your terminal and navigate to the project directory.
