@@ -525,5 +525,169 @@ async def get_sent_emails(
         }
 
 
+@mcp.tool()
+async def download_email_attachments(
+        email_id: str,
+        download_dir: str = "./attachments",
+        imap_username: Optional[str] = None,
+        imap_password: Optional[str] = None,
+        imap_server: Optional[str] = None,
+        imap_port: Optional[int] = None,
+        folder: str = "INBOX"
+) -> Dict[str, Any]:
+    """
+    Download all attachments from a specific email.
+
+    Args:
+        email_id (str): The email ID to download attachments from (obtained from get_inbox_emails or get_sent_emails).
+        download_dir (str): Directory to save attachments. Default is "./attachments".
+        imap_username (str, optional): IMAP login username. Defaults to environment variable SMTP_USERNAME.
+        imap_password (str, optional): IMAP login password. Defaults to environment variable SMTP_PASSWORD.
+        imap_server (str, optional): IMAP server hostname. Defaults to environment variable IMAP_SERVER or "imap.gmail.com".
+        imap_port (int, optional): IMAP server port. Defaults to environment variable IMAP_PORT or 993.
+        folder (str): Email folder to search in. Default is "INBOX". For sent emails, use "[Gmail]/Sent Mail" for Gmail.
+
+    Returns:
+        Dict with:
+            - success (bool): True if operation succeeded.
+            - message (str): Human-readable message.
+            - attachments (List[Dict]): List of downloaded attachments with filename, filepath, and size.
+            - count (int): Number of attachments downloaded.
+            - error (str, optional): Error message if failed.
+    """
+    username = imap_username or DEFAULT_SMTP_USERNAME
+    password = imap_password or DEFAULT_SMTP_PASSWORD
+    server = imap_server or DEFAULT_IMAP_SERVER
+    port = imap_port or DEFAULT_IMAP_PORT
+
+    if not username or not password:
+        return {
+            "success": False,
+            "message": "IMAP credentials not provided",
+            "attachments": [],
+            "count": 0,
+            "error": "Missing SMTP_USERNAME or SMTP_PASSWORD in environment or parameters"
+        }
+
+    try:
+        # Create download directory if it doesn't exist
+        os.makedirs(download_dir, exist_ok=True)
+
+        # Connect to IMAP server
+        mail = imaplib.IMAP4_SSL(server, port)
+        mail.login(username, password)
+
+        # Select the appropriate folder
+        if '[' in folder or '/' in folder:
+            folder = f'"{folder}"' if not folder.startswith('"') else folder
+        status, _ = mail.select(folder)
+        if status != "OK":
+            return {
+                "success": False,
+                "message": f"Could not select folder: {folder}",
+                "attachments": [],
+                "count": 0,
+                "error": f"Failed to select folder '{folder}'"
+            }
+
+        # Fetch the email
+        status, msg_data = mail.fetch(email_id.encode() if isinstance(email_id, str) else email_id, "(RFC822)")
+
+        if status != "OK":
+            return {
+                "success": False,
+                "message": f"Email with ID {email_id} not found",
+                "attachments": [],
+                "count": 0,
+                "error": "Failed to fetch email"
+            }
+
+        # Parse email
+        raw_email = msg_data[0][1]
+        msg = email.message_from_bytes(raw_email)
+
+        # Extract attachments
+        attachments = []
+
+        if msg.is_multipart():
+            for part in msg.walk():
+                # Get content disposition
+                content_disposition = part.get("Content-Disposition", "")
+
+                if "attachment" in content_disposition:
+                    # Get filename
+                    filename = part.get_filename()
+
+                    if filename:
+                        # Decode filename if it's encoded
+                        filename = decode_mime_header(filename)
+
+                        # Create safe filename (remove any path separators)
+                        filename = os.path.basename(filename)
+
+                        # Full filepath
+                        filepath = os.path.join(download_dir, filename)
+
+                        # Handle duplicate filenames
+                        base, ext = os.path.splitext(filename)
+                        counter = 1
+                        while os.path.exists(filepath):
+                            filename = f"{base}_{counter}{ext}"
+                            filepath = os.path.join(download_dir, filename)
+                            counter += 1
+
+                        # Get attachment data
+                        attachment_data = part.get_payload(decode=True)
+
+                        if attachment_data:
+                            # Write to file
+                            with open(filepath, "wb") as f:
+                                f.write(attachment_data)
+
+                            file_size = len(attachment_data)
+                            attachments.append({
+                                "filename": filename,
+                                "filepath": filepath,
+                                "size_bytes": file_size,
+                                "size_readable": f"{file_size / 1024:.2f} KB" if file_size < 1024 * 1024 else f"{file_size / (1024 * 1024):.2f} MB"
+                            })
+
+        mail.close()
+        mail.logout()
+
+        if len(attachments) == 0:
+            return {
+                "success": True,
+                "message": "No attachments found in this email",
+                "attachments": [],
+                "count": 0
+            }
+
+        return {
+            "success": True,
+            "message": f"Downloaded {len(attachments)} attachment(s) to {download_dir}",
+            "attachments": attachments,
+            "count": len(attachments)
+        }
+
+    except imaplib.IMAP4.error as e:
+        return {
+            "success": False,
+            "message": "IMAP authentication or connection failed",
+            "attachments": [],
+            "count": 0,
+            "error": f"Check your credentials. For Gmail, use an App Password. Error: {str(e)}"
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "message": "Failed to download attachments",
+            "attachments": [],
+            "count": 0,
+            "error": f"{type(e).__name__}: {str(e)}"
+        }
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
