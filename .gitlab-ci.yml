@@ -1,0 +1,46 @@
+stages:
+  - check
+  - build
+
+# ---------------------------------------------------------------------------
+# Stage 1: Sanity Check
+# fast checks to ensure code is valid before starting the heavy build
+# ---------------------------------------------------------------------------
+lint_code:
+  stage: check
+  image: python:3.13-slim-bookworm
+  before_script:
+    - pip install ruff
+  script:
+    # 'ruff check' is a very fast linter that catches syntax errors and bad imports
+    - ruff check .
+  # Allow this job to fail if you want to proceed to build regardless of style warnings
+  allow_failure: false
+
+# ---------------------------------------------------------------------------
+# Stage 2: Build and Push Docker Image
+# ---------------------------------------------------------------------------
+build_push_docker:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  variables:
+    # Define image tags using GitLab's predefined variables
+    DOCKER_IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    DOCKER_IMAGE_LATEST: $CI_REGISTRY_IMAGE:latest
+  before_script:
+    # Log in to the GitLab Container Registry
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    # Build the image
+    - echo "Building Docker image..."
+    - docker build -t $DOCKER_IMAGE_TAG -t $DOCKER_IMAGE_LATEST .
+    
+    # Push the image
+    - echo "Pushing Docker image..."
+    - docker push $DOCKER_IMAGE_TAG
+    - docker push $DOCKER_IMAGE_LATEST
+  # Only run this on the main branch (saves storage space)
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
