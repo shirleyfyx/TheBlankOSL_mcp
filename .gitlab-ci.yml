@@ -30,7 +30,8 @@ build_push_docker:
     DOCKER_IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
     DOCKER_IMAGE_LATEST: $CI_REGISTRY_IMAGE:latest
   before_script:
-    # Log in to the GitLab Container Registry
+    - mkdir -p $CI_PROJECT_DIR/.docker-ci
+    - export DOCKER_CONFIG=$CI_PROJECT_DIR/.docker-ci
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
   script:
     # Build the image
