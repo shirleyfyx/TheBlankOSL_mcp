@@ -1,8 +1,6 @@
 import zipfile
 import tarfile
 import anyio
-import shutil
-import os
 from typing import List, Union, Literal
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP

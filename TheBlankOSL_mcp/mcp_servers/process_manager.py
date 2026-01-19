@@ -1,5 +1,5 @@
 from mcp.server.fastmcp import FastMCP
-from typing import List, Optional
+from typing import List
 import psutil
 import anyio
 import subprocess
@@ -98,7 +98,6 @@ async def start_process(command: list[str] | str) -> dict:
 
         # snapshot existing processes
         before = {p.pid for p in psutil.process_iter()}
-        start_time = time.time()
 
         # launch (don't force shell unless you need it)
         proc = subprocess.Popen(command, shell=isinstance(command, str))

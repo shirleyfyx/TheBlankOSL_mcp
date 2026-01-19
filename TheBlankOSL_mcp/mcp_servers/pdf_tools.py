@@ -1,13 +1,11 @@
 import anyio
 import io
-from typing import List, Tuple, Union, Dict, Any, Optional
+from typing import List, Tuple, Union, Dict, Any
 from pathlib import Path
-from pypdf import PdfReader, PdfWriter, PageObject, Transformation
+from pypdf import PdfReader, PdfWriter
 from pypdf.generic import NameObject
 from mcp.server.fastmcp import FastMCP
 from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
-from reportlab.lib.pagesizes import letter
 
 # Initialize MCP Server
 mcp = FastMCP("pdf_tools")

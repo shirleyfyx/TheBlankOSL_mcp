@@ -11,7 +11,6 @@ from email.mime.base import MIMEBase
 from email import encoders
 from email.header import decode_header
 import os
-from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -64,7 +63,7 @@ def decode_mime_header(header: str) -> str:
         if isinstance(content, bytes):
             try:
                 result.append(content.decode(encoding or 'utf-8', errors='ignore'))
-            except:
+            except Exception:
                 result.append(content.decode('utf-8', errors='ignore'))
         else:
             result.append(str(content))
@@ -87,7 +86,7 @@ def extract_email_body(msg: email.message.Message) -> str:
                     payload = part.get_payload(decode=True)
                     charset = part.get_content_charset() or 'utf-8'
                     body += payload.decode(charset, errors='ignore')
-                except:
+                except Exception:
                     pass
             # If no plain text, try html
             elif content_type == "text/html" and not body and "attachment" not in content_disposition:
@@ -95,14 +94,14 @@ def extract_email_body(msg: email.message.Message) -> str:
                     payload = part.get_payload(decode=True)
                     charset = part.get_content_charset() or 'utf-8'
                     body += payload.decode(charset, errors='ignore')
-                except:
+                except Exception:
                     pass
     else:
         try:
             payload = msg.get_payload(decode=True)
             charset = msg.get_content_charset() or 'utf-8'
             body = payload.decode(charset, errors='ignore')
-        except:
+        except Exception:
             body = str(msg.get_payload())
 
     return body.strip()
@@ -337,7 +336,7 @@ async def get_inbox_emails(
                     has_attachments=has_attachments,
                     is_read=is_read
                 ))
-            except Exception as e:
+            except Exception:
                 # Skip this email if there's an error parsing it
                 continue
 
@@ -425,7 +424,7 @@ async def get_sent_emails(
                 if status == "OK":
                     folder_selected = True
                     break
-            except:
+            except Exception:
                 continue
 
         if not folder_selected:
@@ -492,7 +491,7 @@ async def get_sent_emails(
                     has_attachments=has_attachments,
                     is_read=True  # Sent emails are always "read"
                 ))
-            except Exception as e:
+            except Exception:
                 # Skip this email if there's an error parsing it
                 continue
 

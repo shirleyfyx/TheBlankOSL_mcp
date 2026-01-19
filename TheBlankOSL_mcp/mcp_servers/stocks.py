@@ -128,7 +128,7 @@ async def get_top_movers(symbols: list[str] = ["AAPL", "MSFT", "TSLA", "NVDA", "
             try:
                 change_pct = float(quote.get("10. change percent", "0%").replace("%",""))
                 movers.append((sym, change_pct))
-            except:
+            except Exception:
                 continue
     if not movers:
         return "No data for top movers."
