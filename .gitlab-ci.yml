@@ -3,49 +3,44 @@ stages:
   - build
 
 # ---------------------------------------------------------------------------
-# Stage 1: Sanity Check
-# fast checks to ensure code is valid before starting the heavy build
+# Stage 1: Sanity Check (Unchanged)
 # ---------------------------------------------------------------------------
 lint_code:
   stage: check
   script:
-    # 1. Create a virtual environment (safe & isolated)
     - python3 -m venv .venv
-    
-    # 2. Activate it (this provides the 'pip' command)
     - source .venv/bin/activate
-    
-    # 3. Install ruff inside this environment
     - pip install ruff
-    
-    # 4. Run the check (ignoring the errors you saw earlier)
     - ruff check --ignore F401,F841,E722 .
 
 # ---------------------------------------------------------------------------
-# Stage 2: Build and Push Docker Image
+# Stage 2: Build and Push with Docker Compose
 # ---------------------------------------------------------------------------
 build_push_docker:
   stage: build
+  # Docker 24+ includes the 'docker compose' plugin natively
   image: docker:24.0.5
   services:
     - docker:24.0.5-dind
   variables:
-    # Define image tags using GitLab's predefined variables
-    DOCKER_IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
-    DOCKER_IMAGE_LATEST: $CI_REGISTRY_IMAGE:latest
+    # We define the base name for the image here
+    IMAGE_NAME: $CI_REGISTRY_IMAGE
+    IMAGE_TAG: $CI_COMMIT_SHORT_SHA
   before_script:
     - mkdir -p $CI_PROJECT_DIR/.docker-ci
     - export DOCKER_CONFIG=$CI_PROJECT_DIR/.docker-ci
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
   script:
-    # Build the image
-    - echo "Building Docker image..."
-    - docker build -t $DOCKER_IMAGE_TAG -t $DOCKER_IMAGE_LATEST .
+    - echo "Building with Docker Compose..."
+    # 1. We export the variables so docker-compose.yml can use them
+    - export IMAGE_NAME=$IMAGE_NAME
+    - export IMAGE_TAG=$IMAGE_TAG
     
-    # Push the image
-    - echo "Pushing Docker image..."
-    - docker push $DOCKER_IMAGE_TAG
-    - docker push $DOCKER_IMAGE_LATEST
-  # Only run this on the main branch (saves storage space)
+    # 2. Build the services defined in your yaml
+    - docker compose build
+    
+    # 3. Push the images defined in your yaml
+    - docker compose push
+    
   rules:
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
