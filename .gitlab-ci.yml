@@ -2,9 +2,6 @@ stages:
   - check
   - build
 
-variables:
-  COMPOSE_VERSION: "v2.29.1"
-
 # ---------------------------------------------------------------------------
 # Stage 1: Sanity Check
 # ---------------------------------------------------------------------------
@@ -17,11 +14,12 @@ lint_code:
     - ruff check --ignore F401,F841,E722 .
 
 # ---------------------------------------------------------------------------
-# Stage 2: Build and Push
+# Stage 2: Build and Push (The "Clean" Way)
 # ---------------------------------------------------------------------------
 build_push_docker:
   stage: build
-  # Shell runners ignore this image, but we keep it for documentation
+  # We use the docker image here, but since it's a shell runner, 
+  # we will manually invoke the container in the script below.
   image: docker:24.0.5
   services:
     - docker:24.0.5-dind
@@ -30,50 +28,41 @@ build_push_docker:
     IMAGE_TAG: $CI_COMMIT_SHORT_SHA
   
   before_script:
-    # 1. Setup a clean, isolated Docker Config for this specific job
-    - mkdir -p $CI_PROJECT_DIR/.docker-ci/cli-plugins
+    # 1. Login to Registry on the HOST (standard practice)
+    #    We set a custom config path so we can easily share it with the container later.
+    - mkdir -p $CI_PROJECT_DIR/.docker-ci
     - export DOCKER_CONFIG=$CI_PROJECT_DIR/.docker-ci
-
-    # 2. Check if 'docker compose' works. If not, download it DIRECTLY to the job folder.
-    #    (We do NOT touch ~/.docker to avoid the macOS file errors you saw)
-    - |
-      if docker compose version >/dev/null 2>&1; then
-        echo "Docker Compose detected on host. Using system version."
-        # Even if system has it, we symlink it to our local config to be safe
-        # (Optional, but ensures DOCKER_CONFIG sees it)
-      else
-        echo "Downloading Docker Compose $COMPOSE_VERSION..."
-        
-        # Download directly to the local job config
-        PLUGIN_PATH=$DOCKER_CONFIG/cli-plugins/docker-compose
-        URL="https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-x86_64"
-        
-        # Check if we are on Mac (Darwin) to download the correct binary
-        if [[ "$(uname)" == "Darwin" ]]; then
-           URL="https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-darwin-aarch64"
-        fi
-
-        if command -v curl >/dev/null 2>&1; then
-          curl -SL $URL -o $PLUGIN_PATH
-        else
-          wget -O $PLUGIN_PATH $URL
-        fi
-        
-        chmod +x $PLUGIN_PATH
-      fi
-
-    # 3. Login (config.json will be written to $DOCKER_CONFIG)
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
 
   script:
-    - echo "Building Docker image..."
-    - export IMAGE_NAME=$IMAGE_NAME
-    - export IMAGE_TAG=$IMAGE_TAG
+    - echo "Building Docker image using containerized toolchain..."
     
-    # Verify we can see the command
-    - docker compose version
+    # -----------------------------------------------------------------------
+    # THE GOOD PRACTICE SOLUTION
+    # We run the build commands INSIDE an ephemeral 'docker:cli' container.
+    # This guarantees the 'docker compose' command exists and is the correct version.
+    # -----------------------------------------------------------------------
     
-    - docker compose build
-    - docker compose push
+    # 1. Build
+    - docker run --rm \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        -v "$CI_PROJECT_DIR":"$CI_PROJECT_DIR" \
+        -v "$DOCKER_CONFIG":/root/.docker \
+        -w "$CI_PROJECT_DIR" \
+        -e IMAGE_NAME=$IMAGE_NAME \
+        -e IMAGE_TAG=$IMAGE_TAG \
+        docker:cli compose build
+    
+    # 2. Push
+    # We mount the DOCKER_CONFIG so the container has permission to push
+    - docker run --rm \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        -v "$CI_PROJECT_DIR":"$CI_PROJECT_DIR" \
+        -v "$DOCKER_CONFIG":/root/.docker \
+        -w "$CI_PROJECT_DIR" \
+        -e IMAGE_NAME=$IMAGE_NAME \
+        -e IMAGE_TAG=$IMAGE_TAG \
+        docker:cli compose push
+
   rules:
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
