@@ -14,7 +14,7 @@ ALPHA_URL = "https://www.alphavantage.co/query"
 API_KEY = "AGIYJRZ4EDWB9MMN" # Public API key for testing
 
 if not API_KEY:
-    raise RuntimeError("⚠️ Missing ALPHAVANTAGE_API_KEY environment variable.")
+    raise RuntimeError("Missing ALPHAVANTAGE_API_KEY environment variable.")
 
 # Simple cache decorator (5 min TTL)
 def cache_ttl(ttl_seconds: int):
