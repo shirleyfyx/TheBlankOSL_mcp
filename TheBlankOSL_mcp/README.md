@@ -5,15 +5,19 @@
 
 ## Setting Dev Environment with Docker (New Setup)
 
-### 1. Start the Shared Container
+### 1. Build the container
 1. Open your terminal and navigate to the project directory.
-2. Run the startup script (this builds the image and starts the container):
-   ```bash
-   ./start_docker.sh
-   ```
+2. Run "docker compose up -d --build"
    *Note: You only need to run this once to start the background container.*
+   Next time starting the image by simply using "docker compose up -d"
 
-### 2. Configure Claude Desktop
+### 2. Configure VS Code
+1. Installs "Dev Containers" extension.
+2. Click the >< button in the very bottom-left corner of VS Code.
+3. Select "Attach to Running Container...".
+4. Choose mcp-shared.
+
+### 3. Configure Claude Desktop
 Modify your `claude_desktop_config.json` to connect to the running container using `docker exec`.
 You can copy the configuration from `TheBlankOSL_mcp/mcp_client/claude_desktop_config.json`.
 
@@ -37,7 +41,7 @@ Example entry:
 
 
 
-## Setting Up the Virtual Environment (Old Setup)
+## Setting Up the Virtual Environment (Deprecated)
 
 ### Using `venv`
 1. Open your terminal and navigate to the project directory.

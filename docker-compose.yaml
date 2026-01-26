@@ -1,0 +1,14 @@
+services:
+    mcp-shared:
+        image: mcp-server
+        container_name: mcp-shared
+        build: .
+        command: [ "sleep", "infinity" ]
+        init: true
+        restart: unless-stopped
+        volumes:
+            - .:/app
+            - ~:/root
+        environment:
+            OPENAI_API_KEY: ${OPENAI_API_KEY}
+            YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
