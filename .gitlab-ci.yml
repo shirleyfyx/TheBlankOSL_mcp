@@ -3,7 +3,7 @@ stages:
   - build
 
 # ---------------------------------------------------------------------------
-# Stage 1: Sanity Check (Unchanged)
+# Stage 1: Sanity Check
 # ---------------------------------------------------------------------------
 lint_code:
   stage: check
@@ -14,33 +14,36 @@ lint_code:
     - ruff check --ignore F401,F841,E722 .
 
 # ---------------------------------------------------------------------------
-# Stage 2: Build and Push with Docker Compose
+# Stage 2: Build and Push Docker Image
 # ---------------------------------------------------------------------------
 build_push_docker:
   stage: build
-  # Docker 24+ includes the 'docker compose' plugin natively
   image: docker:24.0.5
   services:
     - docker:24.0.5-dind
   variables:
-    # We define the base name for the image here
+    # Define the target registry name and tag
     IMAGE_NAME: $CI_REGISTRY_IMAGE
     IMAGE_TAG: $CI_COMMIT_SHORT_SHA
   before_script:
+    # --- THE FIX: Install Docker Compose Plugin ---
+    - apk add --no-cache docker-cli-compose
+
+    # Login to GitLab Registry
     - mkdir -p $CI_PROJECT_DIR/.docker-ci
     - export DOCKER_CONFIG=$CI_PROJECT_DIR/.docker-ci
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
   script:
-    - echo "Building with Docker Compose..."
-    # 1. We export the variables so docker-compose.yml can use them
+    - echo "Building Docker image with Compose..."
+    
+    # Export variables so docker-compose.yml can read them
     - export IMAGE_NAME=$IMAGE_NAME
     - export IMAGE_TAG=$IMAGE_TAG
     
-    # 2. Build the services defined in your yaml
+    # Build using the definition in your YAML
     - docker compose build
     
-    # 3. Push the images defined in your yaml
+    # Push the built images to the registry
     - docker compose push
-    
   rules:
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
