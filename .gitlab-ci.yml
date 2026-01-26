@@ -14,55 +14,52 @@ lint_code:
     - ruff check --ignore F401,F841,E722 .
 
 # ---------------------------------------------------------------------------
-# Stage 2: Build and Push (The "Clean" Way)
+# Stage 2: Build and Push (Vendored Toolchain)
 # ---------------------------------------------------------------------------
 build_push_docker:
   stage: build
-  # We use the docker image here, but since it's a shell runner, 
-  # we will manually invoke the container in the script below.
   image: docker:24.0.5
   services:
     - docker:24.0.5-dind
   variables:
     IMAGE_NAME: $CI_REGISTRY_IMAGE
     IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+    # Pin a specific stable version to ensure reproducibility (Good Practice)
+    COMPOSE_VERSION: "v2.29.1" 
   
   before_script:
-    # 1. Login to Registry on the HOST (standard practice)
-    #    We set a custom config path so we can easily share it with the container later.
+    # 1. Login to Registry
     - mkdir -p $CI_PROJECT_DIR/.docker-ci
     - export DOCKER_CONFIG=$CI_PROJECT_DIR/.docker-ci
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
 
-  script:
-    - echo "Building Docker image using containerized toolchain..."
+    # 2. Provision Docker Compose Locally (Vendoring)
+    # We create a local 'bin' folder for this job execution only.
+    - mkdir -p $CI_PROJECT_DIR/.local/bin
     
-    # -----------------------------------------------------------------------
-    # THE GOOD PRACTICE SOLUTION
-    # We run the build commands INSIDE an ephemeral 'docker:cli' container.
-    # This guarantees the 'docker compose' command exists and is the correct version.
-    # -----------------------------------------------------------------------
-    
-    # 1. Build
-    - docker run --rm \
-        -v /var/run/docker.sock:/var/run/docker.sock \
-        -v "$CI_PROJECT_DIR":"$CI_PROJECT_DIR" \
-        -v "$DOCKER_CONFIG":/root/.docker \
-        -w "$CI_PROJECT_DIR" \
-        -e IMAGE_NAME=$IMAGE_NAME \
-        -e IMAGE_TAG=$IMAGE_TAG \
-        docker:cli compose build
-    
-    # 2. Push
-    # We mount the DOCKER_CONFIG so the container has permission to push
-    - docker run --rm \
-        -v /var/run/docker.sock:/var/run/docker.sock \
-        -v "$CI_PROJECT_DIR":"$CI_PROJECT_DIR" \
-        -v "$DOCKER_CONFIG":/root/.docker \
-        -w "$CI_PROJECT_DIR" \
-        -e IMAGE_NAME=$IMAGE_NAME \
-        -e IMAGE_TAG=$IMAGE_TAG \
-        docker:cli compose push
+    # 3. Detect System Architecture (Apple Silicon vs Intel)
+    - |
+      ARCH="x86_64"
+      if [[ "$(uname -m)" == "arm64" ]]; then ARCH="aarch64"; fi
+      
+      OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+      BINARY_URL="https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-$OS-$ARCH"
+      
+      echo "Provisioning Toolchain: docker-compose ($OS-$ARCH @ $COMPOSE_VERSION)"
+      
+      # Download into the local project bin (Isolated from Host)
+      curl -L --fail --silent --show-error $BINARY_URL -o $CI_PROJECT_DIR/.local/bin/docker-compose
+      chmod +x $CI_PROJECT_DIR/.local/bin/docker-compose
 
+  script:
+    - echo "Building Docker image..."
+    - export IMAGE_NAME=$IMAGE_NAME
+    - export IMAGE_TAG=$IMAGE_TAG
+    
+    # 4. Execute using the local tool
+    # We use the absolute path to ensure we use OUR version, not the system's
+    - $CI_PROJECT_DIR/.local/bin/docker-compose build
+    - $CI_PROJECT_DIR/.local/bin/docker-compose push
+    
   rules:
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
