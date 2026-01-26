@@ -3,7 +3,6 @@ stages:
   - build
 
 variables:
-  # Pin the version for stability (Robustness factor: High)
   COMPOSE_VERSION: "v2.29.1"
 
 # ---------------------------------------------------------------------------
@@ -18,12 +17,11 @@ lint_code:
     - ruff check --ignore F401,F841,E722 .
 
 # ---------------------------------------------------------------------------
-# Stage 2: Build and Push Docker Image
+# Stage 2: Build and Push
 # ---------------------------------------------------------------------------
 build_push_docker:
   stage: build
-  # We still request this image, but the script below ensures it works
-  # even if the runner ignores this image (Shell Executor fallback).
+  # Shell runners ignore this image, but we keep it for documentation
   image: docker:24.0.5
   services:
     - docker:24.0.5-dind
@@ -32,47 +30,47 @@ build_push_docker:
     IMAGE_TAG: $CI_COMMIT_SHORT_SHA
   
   before_script:
-    # -----------------------------------------------------------------------
-    # ROBUST INSTALLATION STRATEGY
-    # -----------------------------------------------------------------------
-    # 1. Set up the plugin directory in user space (no sudo needed)
-    - mkdir -p ~/.docker/cli-plugins
+    # 1. Setup a clean, isolated Docker Config for this specific job
+    - mkdir -p $CI_PROJECT_DIR/.docker-ci/cli-plugins
+    - export DOCKER_CONFIG=$CI_PROJECT_DIR/.docker-ci
 
-    # 2. Install Docker Compose ONLY if it's missing
+    # 2. Check if 'docker compose' works. If not, download it DIRECTLY to the job folder.
+    #    (We do NOT touch ~/.docker to avoid the macOS file errors you saw)
     - |
       if docker compose version >/dev/null 2>&1; then
-        echo "Docker Compose detected. Skipping install."
+        echo "Docker Compose detected on host. Using system version."
+        # Even if system has it, we symlink it to our local config to be safe
+        # (Optional, but ensures DOCKER_CONFIG sees it)
       else
-        echo "Docker Compose not found. Installing version $COMPOSE_VERSION..."
+        echo "Downloading Docker Compose $COMPOSE_VERSION..."
         
-        # Define download URL
+        # Download directly to the local job config
+        PLUGIN_PATH=$DOCKER_CONFIG/cli-plugins/docker-compose
         URL="https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-x86_64"
-        DEST=~/.docker/cli-plugins/docker-compose
         
-        # Try curl, fallback to wget (Covers 99% of Linux systems)
+        # Check if we are on Mac (Darwin) to download the correct binary
+        if [[ "$(uname)" == "Darwin" ]]; then
+           URL="https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-darwin-aarch64"
+        fi
+
         if command -v curl >/dev/null 2>&1; then
-          curl -SL $URL -o $DEST
+          curl -SL $URL -o $PLUGIN_PATH
         else
-          wget -O $DEST $URL
+          wget -O $PLUGIN_PATH $URL
         fi
         
-        # Make executable
-        chmod +x $DEST
+        chmod +x $PLUGIN_PATH
       fi
 
-    # 3. Standard Login
-    - mkdir -p $CI_PROJECT_DIR/.docker-ci
-    - export DOCKER_CONFIG=$CI_PROJECT_DIR/.docker-ci
-    # Copy the plugin we just downloaded into the specific config dir we just made
-    - cp -r ~/.docker/cli-plugins $DOCKER_CONFIG/cli-plugins
+    # 3. Login (config.json will be written to $DOCKER_CONFIG)
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
 
   script:
-    - echo "Building Docker image with Compose..."
+    - echo "Building Docker image..."
     - export IMAGE_NAME=$IMAGE_NAME
     - export IMAGE_TAG=$IMAGE_TAG
     
-    # Verify version before running
+    # Verify we can see the command
     - docker compose version
     
     - docker compose build
