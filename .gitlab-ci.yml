@@ -3,63 +3,48 @@ stages:
   - build
 
 # ---------------------------------------------------------------------------
-# Stage 1: Sanity Check
+# Stage 1: Linting
 # ---------------------------------------------------------------------------
 lint_code:
   stage: check
   script:
     - python3 -m venv .venv
     - source .venv/bin/activate
-    - pip install ruff
-    - ruff check --ignore F401,F841,E722 .
+    - pip install ruff && ruff check --ignore F401,F841,E722 .
 
 # ---------------------------------------------------------------------------
-# Stage 2: Build and Push (Vendored Toolchain)
+# Stage 2: Build & Push
 # ---------------------------------------------------------------------------
-build_push_docker:
+build_push:
   stage: build
-  image: docker:24.0.5
-  services:
-    - docker:24.0.5-dind
   variables:
     IMAGE_NAME: $CI_REGISTRY_IMAGE
     IMAGE_TAG: $CI_COMMIT_SHORT_SHA
-    # Pin a specific stable version to ensure reproducibility (Good Practice)
-    COMPOSE_VERSION: "v2.29.1" 
+    COMPOSE_VER: "v2.29.1"
   
   before_script:
-    # 1. Login to Registry
-    - mkdir -p $CI_PROJECT_DIR/.docker-ci
-    - export DOCKER_CONFIG=$CI_PROJECT_DIR/.docker-ci
+    # 1. Download Docker Compose to a local folder (Clean & Isolated)
+    - mkdir -p .local/bin
+    - |
+      # Simple detection for Mac (arm64/x86_64) vs Linux
+      OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+      ARCH=$(uname -m | sed 's/arm64/aarch64/')
+      URL="https://github.com/docker/compose/releases/download/$COMPOSE_VER/docker-compose-$OS-$ARCH"
+      
+      echo "Downloading: $URL"
+      curl -L --fail --silent $URL -o .local/bin/docker-compose
+      chmod +x .local/bin/docker-compose
+
+    # 2. Login (Uses your Mac's native Docker config automatically)
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
 
-    # 2. Provision Docker Compose Locally (Vendoring)
-    # We create a local 'bin' folder for this job execution only.
-    - mkdir -p $CI_PROJECT_DIR/.local/bin
-    
-    # 3. Detect System Architecture (Apple Silicon vs Intel)
-    - |
-      ARCH="x86_64"
-      if [[ "$(uname -m)" == "arm64" ]]; then ARCH="aarch64"; fi
-      
-      OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-      BINARY_URL="https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-$OS-$ARCH"
-      
-      echo "Provisioning Toolchain: docker-compose ($OS-$ARCH @ $COMPOSE_VERSION)"
-      
-      # Download into the local project bin (Isolated from Host)
-      curl -L --fail --silent --show-error $BINARY_URL -o $CI_PROJECT_DIR/.local/bin/docker-compose
-      chmod +x $CI_PROJECT_DIR/.local/bin/docker-compose
-
   script:
-    - echo "Building Docker image..."
+    # 3. Build & Push using the local binary
     - export IMAGE_NAME=$IMAGE_NAME
     - export IMAGE_TAG=$IMAGE_TAG
     
-    # 4. Execute using the local tool
-    # We use the absolute path to ensure we use OUR version, not the system's
-    - $CI_PROJECT_DIR/.local/bin/docker-compose build
-    - $CI_PROJECT_DIR/.local/bin/docker-compose push
+    - .local/bin/docker-compose build
+    - .local/bin/docker-compose push
     
   rules:
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
