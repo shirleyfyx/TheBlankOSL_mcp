@@ -7,10 +7,10 @@ stages:
 # ---------------------------------------------------------------------------
 lint_code:
   stage: check
-  image: python:3.13-slim
   script:
-    - pip install ruff
-    - ruff check --ignore F401,F841,E722 .
+    - python3 -m venv .venv
+    - source .venv/bin/activate
+    - pip install ruff && ruff check --ignore F401,F841,E722 .
 
 # ---------------------------------------------------------------------------
 # Stage 2: Build & Push
