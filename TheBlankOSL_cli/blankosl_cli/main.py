@@ -10,8 +10,10 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 
 from blankosl_cli import __version__
+from blankosl_cli.config_parser import McpConfig, get_default_config_path
 
 # Initialize Typer app
 app = typer.Typer(
@@ -41,6 +43,41 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def load_config(config_path: Optional[Path] = None) -> McpConfig:
+    """
+    Load MCP configuration from the specified path or default Claude Desktop config.
+
+    Args:
+        config_path: Optional path to config file. If None, uses Claude Desktop default.
+
+    Returns:
+        McpConfig object with loaded server configurations.
+
+    Raises:
+        typer.Exit: If no config file is found.
+    """
+    if config_path is None:
+        config_path = get_default_config_path()
+
+    if config_path is None:
+        console.print(
+            "[red]Error:[/red] No config file found.\n\n"
+            "Provide a config file with [bold]--config[/bold] or ensure Claude Desktop "
+            "is installed with a valid configuration.",
+            style="red",
+        )
+        raise typer.Exit(1)
+
+    try:
+        return McpConfig.load(str(config_path))
+    except FileNotFoundError:
+        console.print(f"[red]Error:[/red] Config file not found: {config_path}")
+        raise typer.Exit(1)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] Invalid config: {e}")
+        raise typer.Exit(1)
+
+
 @app.callback()
 def main(
     version: bool = typer.Option(
@@ -62,10 +99,88 @@ def main(
     • Manually call specific tools with JSON arguments
     • Chat with an LLM that can invoke MCP tools automatically
     """
-    # Store config in context for subcommands
-    if config:
-        # Will be used by subcommands
-        pass
+    # Config will be loaded by subcommands as needed
+    pass
+
+
+# ============================================================================
+# CONFIG Subcommand
+# ============================================================================
+@app.command("config")
+def config_show(
+    config: Optional[Path] = CONFIG_OPTION,
+    validate: bool = typer.Option(
+        False,
+        "--validate",
+        help="Validate that all server commands exist.",
+    ),
+) -> None:
+    """
+    Show the current MCP server configuration.
+
+    Displays all configured MCP servers from Claude Desktop or custom config file.
+    """
+    # Determine config path
+    config_path = config if config else get_default_config_path()
+
+    if config_path is None:
+        console.print(
+            "[yellow]No configuration file found.[/yellow]\n\n"
+            "Expected locations:\n"
+            "  • macOS: ~/Library/Application Support/Claude/claude_desktop_config.json\n"
+            "  • Windows: %APPDATA%/Claude/claude_desktop_config.json\n"
+            "  • Linux: ~/.config/Claude/claude_desktop_config.json\n\n"
+            "Use [bold]--config[/bold] to specify a custom config file."
+        )
+        raise typer.Exit(1)
+
+    console.print(f"[dim]Config file:[/dim] {config_path}\n")
+
+    # Load and display config
+    mcp_config = load_config(config_path)
+
+    if not mcp_config.servers:
+        console.print("[yellow]No MCP servers configured.[/yellow]")
+        raise typer.Exit()
+
+    # Create table
+    table = Table(title="MCP Servers", show_header=True, header_style="bold blue")
+    table.add_column("Server", style="cyan")
+    table.add_column("Command")
+    table.add_column("Args")
+    table.add_column("Status", justify="center")
+
+    import shutil
+
+    for name, server in mcp_config.servers.items():
+        # Check if enabled
+        if not server.enabled:
+            status = "[dim]disabled[/dim]"
+        elif validate:
+            # Check if command exists
+            cmd_exists = shutil.which(server.command) is not None
+            status = "[green]✓[/green]" if cmd_exists else "[red]✗ not found[/red]"
+        else:
+            status = "[green]enabled[/green]"
+
+        args_str = " ".join(server.args[:3])
+        if len(server.args) > 3:
+            args_str += " ..."
+
+        table.add_row(name, server.command, args_str or "[dim]none[/dim]", status)
+
+    console.print(table)
+
+    # Show env vars if any
+    servers_with_env = [(n, s) for n, s in mcp_config.servers.items() if s.env]
+    if servers_with_env:
+        console.print("\n[bold]Environment Variables:[/bold]")
+        for name, server in servers_with_env:
+            console.print(f"  [cyan]{name}[/cyan]:")
+            for key, value in server.env.items():
+                # Mask sensitive values
+                display_value = value[:4] + "..." if len(value) > 8 else value
+                console.print(f"    {key}={display_value}")
 
 
 # ============================================================================

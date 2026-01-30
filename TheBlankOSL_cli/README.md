@@ -44,9 +44,38 @@ blankosl_cli --version
 blankosl_cli --help
 ```
 
+### View/validate configuration
+```bash
+# Show configured MCP servers (auto-detects Claude Desktop config)
+blankosl_cli config
+
+# Validate that all server commands exist
+blankosl_cli config --validate
+
+# Use a custom config file
+blankosl_cli config --config /path/to/config.json
+```
+
+Example output:
+```
+Config file: ~/Library/Application Support/Claude/claude_desktop_config.json
+
+                          MCP Servers
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┓
+┃ Server          ┃ Command ┃ Args                   ┃ Status ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━┩
+│ weather         │ docker  │ exec -i mcp-shared ... │   ✓    │
+│ filesystem      │ docker  │ exec -i mcp-shared ... │   ✓    │
+└─────────────────┴─────────┴────────────────────────┴────────┘
+```
+
 ## Configuration
 
-By default, the CLI reads MCP server definitions from Claude Desktop's config file.
+By default, the CLI reads MCP server definitions from Claude Desktop's config file:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
+- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+
 You can override this with the `--config` option or `BLANKOSL_CONFIG` environment variable.
 
 ## Development

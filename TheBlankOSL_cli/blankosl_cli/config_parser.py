@@ -1,7 +1,34 @@
 import json
 import os
+import platform
 from dataclasses import dataclass, field
-from typing import Dict, List
+from pathlib import Path
+from typing import Dict, List, Optional
+
+
+def get_default_config_path() -> Optional[Path]:
+    """
+    Returns the default Claude Desktop config path for the current platform.
+
+    - macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
+    - Windows: %APPDATA%/Claude/claude_desktop_config.json
+    - Linux: ~/.config/Claude/claude_desktop_config.json
+    """
+    system = platform.system()
+
+    if system == "Darwin":  # macOS
+        base = Path.home() / "Library" / "Application Support" / "Claude"
+    elif system == "Windows":
+        appdata = os.environ.get("APPDATA", "")
+        base = Path(appdata) / "Claude" if appdata else None
+    else:  # Linux and others
+        base = Path.home() / ".config" / "Claude"
+
+    if base is None:
+        return None
+
+    config_path = base / "claude_desktop_config.json"
+    return config_path if config_path.exists() else None
 
 @dataclass
 class ServerConfig:
@@ -28,16 +55,16 @@ class McpConfig:
 
         with open(path, 'r') as f:
             data = json.load(f)
-        
+
         # Expect top-level key "mcpServers"
         servers_data = data.get("mcpServers", {})
         config = cls()
-        
+
         for name, s_data in servers_data.items():
             # Validate required fields
             if "command" not in s_data:
                 raise ValueError(f"Server '{name}' is missing required field: 'command'")
-            
+
             # Create object
             server = ServerConfig(
                 command=s_data["command"],
@@ -45,11 +72,11 @@ class McpConfig:
                 env=s_data.get("env", {}),
                 enabled=s_data.get("enabled", True)
             )
-            
+
             # Expand variables immediately upon load
             server.expand_vars()
             config.servers[name] = server
-            
+
         return config
 
     def save(self, path: str):
