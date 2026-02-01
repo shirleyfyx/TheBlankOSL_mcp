@@ -7,9 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY TheBlankOSL_mcp/requirements.txt .
-
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy and install Python dependencies
+COPY TheBlankOSL_mcp/pyproject.toml TheBlankOSL_mcp/
+COPY TheBlankOSL_mcp/mcp_client TheBlankOSL_mcp/mcp_client
+COPY TheBlankOSL_mcp/mcp_servers TheBlankOSL_mcp/mcp_servers
+RUN pip install --no-cache-dir ./TheBlankOSL_mcp
 
 COPY . .
 
