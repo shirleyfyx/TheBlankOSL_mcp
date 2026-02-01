@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "blankosl-cli"
+version = "0.1.0"
+description = "A Python CLI MCP client that locally replaces Claude Desktop's MCP functionality"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    { name = "Design Team 23" }
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "typer[all]>=0.9.0",
+    "pyyaml>=6.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pre-commit>=4.0.0",
+    "ruff>=0.9.0",
+]
+
+[project.scripts]
+blankosl_cli = "blankosl_cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["blankosl_cli"]
