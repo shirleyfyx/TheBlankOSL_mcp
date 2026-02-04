@@ -9,6 +9,7 @@ WORKDIR /app
 
 # Copy and install Python dependencies
 COPY TheBlankOSL_mcp/pyproject.toml TheBlankOSL_mcp/
+COPY TheBlankOSL_mcp/README.md TheBlankOSL_mcp/
 COPY TheBlankOSL_mcp/mcp_client TheBlankOSL_mcp/mcp_client
 COPY TheBlankOSL_mcp/mcp_servers TheBlankOSL_mcp/mcp_servers
 RUN pip install --no-cache-dir ./TheBlankOSL_mcp
