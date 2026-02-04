@@ -12,8 +12,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from blankosl_cli import __version__
-from blankosl_cli.config_parser import McpConfig, get_default_config_path
+from mcp_client import __version__
+from mcp_client.config_parser import McpConfig, get_default_config_path
 
 # Initialize Typer app
 app = typer.Typer(
