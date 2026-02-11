@@ -6,12 +6,6 @@ Before running any server, ensure that your environement is set up correctly.
 
 Follow the official MCP [documentation](https://modelcontextprotocol.io/docs/develop/build-server) for installation and setup.
 
-## Running a Server
-Navigate into the server’s directory and use the appropriate command:
-```bash
-uv run server.py
-```
-
 ## Connecting to Claude Desktop
 To register a server with Claude Desktop, edit:
 ```bash

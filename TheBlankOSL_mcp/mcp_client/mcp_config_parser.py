@@ -1,34 +1,8 @@
 import json
 import os
-import platform
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
-
-
-def get_default_config_path() -> Optional[Path]:
-    """
-    Returns the default Claude Desktop config path for the current platform.
-
-    - macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
-    - Windows: %APPDATA%/Claude/claude_desktop_config.json
-    - Linux: ~/.config/Claude/claude_desktop_config.json
-    """
-    system = platform.system()
-
-    if system == "Darwin":  # macOS
-        base = Path.home() / "Library" / "Application Support" / "Claude"
-    elif system == "Windows":
-        appdata = os.environ.get("APPDATA", "")
-        base = Path(appdata) / "Claude" if appdata else None
-    else:  # Linux and others
-        base = Path.home() / ".config" / "Claude"
-
-    if base is None:
-        return None
-
-    config_path = base / "claude_desktop_config.json"
-    return config_path if config_path.exists() else None
+from typing import Dict, List
 
 @dataclass
 class ServerConfig:
@@ -48,12 +22,16 @@ class McpConfig:
     servers: Dict[str, ServerConfig] = field(default_factory=dict)
 
     @classmethod
-    def load(cls, path: str):
-        """Loads JSON, validates 'command' exists, and expands env vars."""
-        if not os.path.exists(path):
+    def load(cls, path: str) -> "McpConfig":
+        """
+        Loads JSON from path, validates required fields, and expands environment variables.
+        Raises FileNotFoundError or ValueError on failure.
+        """
+        path_obj = Path(path)
+        if not path_obj.exists():
             raise FileNotFoundError(f"Config file not found: {path}")
 
-        with open(path, 'r') as f:
+        with open(path_obj, 'r', encoding="utf-8") as f:
             data = json.load(f)
 
         # Expect top-level key "mcpServers"
@@ -92,5 +70,5 @@ class McpConfig:
                 for name, s in self.servers.items()
             }
         }
-        with open(path, 'w') as f:
+        with open(path, 'w', encoding="utf-8") as f:
             json.dump(output, f, indent=4)
