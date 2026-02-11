@@ -5,11 +5,11 @@ from pathlib import Path
 from typing import Dict, List
 
 @dataclass
-class ServerConfig:
+class McpServerConfig:
     command: str
     args: List[str] = field(default_factory=list)
     env: Dict[str, str] = field(default_factory=dict)
-    enabled: bool = True
+    enabled: bool = False
 
     def expand_vars(self):
         """Expands ~ and $VAR in command, args, and env values."""
@@ -19,7 +19,7 @@ class ServerConfig:
 
 @dataclass
 class McpConfig:
-    servers: Dict[str, ServerConfig] = field(default_factory=dict)
+    servers: Dict[str, McpServerConfig] = field(default_factory=dict)
 
     @classmethod
     def load(cls, path: str) -> "McpConfig":
@@ -44,7 +44,7 @@ class McpConfig:
                 raise ValueError(f"Server '{name}' is missing required field: 'command'")
 
             # Create object
-            server = ServerConfig(
+            server = McpServerConfig(
                 command=s_data["command"],
                 args=s_data.get("args", []),
                 env=s_data.get("env", {}),

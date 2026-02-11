@@ -1,0 +1,60 @@
+{
+    "mcpServers": {
+        "weather": {
+            "command": "python",
+            "args": [
+                "/app/TheBlankOSL_mcp/mcp_servers/weather.py"
+            ]
+        },
+        "filesystem": {
+            "command": "python",
+            "args": [
+                "/app/TheBlankOSL_mcp/mcp_servers/filesystem.py"
+            ]
+        },
+        "youtube": {
+            "command": "python",
+            "args": [
+                "/app/TheBlankOSL_mcp/mcp_servers/youtube.py"
+            ]
+        },
+        "process_manager": {
+            "command": "python",
+            "args": [
+                "/app/TheBlankOSL_mcp/mcp_servers/process_manager.py"
+            ]
+        },
+        "stocks": {
+            "command": "python",
+            "args": [
+                "/app/TheBlankOSL_mcp/mcp_servers/stocks.py"
+            ]
+        },
+        "task_scheduler": {
+            "command": "python",
+            "args": [
+                "/app/TheBlankOSL_mcp/mcp_servers/task_scheduler.py"
+            ]
+        },
+        "archive_manager": {
+            "command": "python",
+            "args": [
+                "/app/TheBlankOSL_mcp/mcp_servers/archive_manager.py"
+            ]
+        },
+        "email_manager": {
+            "command": "python",
+            "args": [
+                "/app/TheBlankOSL_mcp/mcp_servers/email_manager.py"
+            ]
+        },
+        "pdf_tools": {
+            "command": "python",
+            "args": [
+                "/app/TheBlankOSL_mcp/mcp_servers/pdf_tools.py"
+            ]
+        }
+    },
+    "isDxtAutoUpdatesEnabled": false,
+    "isUsingBuiltInNodeForMcp": true
+}
