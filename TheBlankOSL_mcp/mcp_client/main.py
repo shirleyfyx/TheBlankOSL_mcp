@@ -1,21 +1,26 @@
-"""
-BlankOSL CLI - Main entry point.
-
-A Python CLI MCP client that locally replaces Claude Desktop's MCP functionality.
-"""
-
-from pathlib import Path
-from typing import Optional
-
+import asyncio
 import typer
-from rich.console import Console
+import shlex
+import json
+from typing import List, Dict, Callable, Any
+from rich.prompt import Prompt
 from rich.panel import Panel
 from rich.table import Table
 
-from mcp_client import __version__
-from mcp_client.config_parser import McpConfig, get_default_config_path
+# Import your modules
+from . import __version__
+from .utils import console, load_mcp_config
+from .mcp_manager import McpManager
+from .commands import config as config_cmd
+from .commands import tools as tools_cmd
+from .commands import call as call_cmd
 
-# Initialize Typer app
+# Import reusable logic from subcommands
+from .commands.tools import list_tools_logic, info_tool_logic
+from .commands.call import call_tool_logic
+from .commands.config import show_config_logic
+
+# --- Typer App Setup ---
 app = typer.Typer(
     name="blankosl_cli",
     help="A Python CLI MCP client for terminal-based tool execution.",
@@ -23,337 +28,149 @@ app = typer.Typer(
     rich_markup_mode="rich",
 )
 
-# Rich console for pretty output
-console = Console()
+app.add_typer(config_cmd.app, name="config")
+app.add_typer(tools_cmd.app, name="tools")
+app.add_typer(call_cmd.app, name="call")
 
-# Global config option
-CONFIG_OPTION = typer.Option(
-    None,
-    "--config",
-    "-c",
-    help="Path to MCP server configuration file (defaults to Claude Desktop config).",
-    envvar="BLANKOSL_CONFIG",
-)
+# --- Interactive Command Handlers ---
 
+async def cmd_tools_list_all(manager: McpManager, args: List[str]):
+    """List available tools. Usage: /list-all [filter]"""
+    filter_str = args[0] if args else None
+    await list_tools_logic(manager, filter_str)
 
-def version_callback(value: bool) -> None:
-    """Print version and exit."""
-    if value:
-        console.print(f"[bold blue]blankosl_cli[/bold blue] version {__version__}")
-        raise typer.Exit()
+async def cmd_tools_list(manager: McpManager, args: List[str]):
+    """Show tool details. Usage: /list <tool_name>"""
+    if not args:
+        console.print("[red]Usage:[/red] /list <tool_name>")
+        return
+    await info_tool_logic(manager, args[0])
 
+async def cmd_call(manager: McpManager, args: List[str]):
+    """Execute a tool. Usage: /call <tool_name> [json_args]"""
+    if not args:
+        console.print("[red]Usage:[/red] /call <tool_name> [json_args]")
+        return
 
-def load_config(config_path: Optional[Path] = None) -> McpConfig:
-    """
-    Load MCP configuration from the specified path or default Claude Desktop config.
-
-    Args:
-        config_path: Optional path to config file. If None, uses Claude Desktop default.
-
-    Returns:
-        McpConfig object with loaded server configurations.
-
-    Raises:
-        typer.Exit: If no config file is found.
-    """
-    if config_path is None:
-        config_path = get_default_config_path()
-
-    if config_path is None:
-        console.print(
-            "[red]Error:[/red] No config file found.\n\n"
-            "Provide a config file with [bold]--config[/bold] or ensure Claude Desktop "
-            "is installed with a valid configuration.",
-            style="red",
-        )
-        raise typer.Exit(1)
+    tool_name = args[0]
+    args_str = " ".join(args[1:]) if len(args) > 1 else "{}"
 
     try:
-        return McpConfig.load(str(config_path))
-    except FileNotFoundError:
-        console.print(f"[red]Error:[/red] Config file not found: {config_path}")
-        raise typer.Exit(1)
-    except ValueError as e:
-        console.print(f"[red]Error:[/red] Invalid config: {e}")
-        raise typer.Exit(1)
+        tool_args = json.loads(args_str)
+        await call_tool_logic(manager, tool_name, tool_args)
+    except json.JSONDecodeError:
+        console.print("[red]Error:[/red] Arguments must be valid JSON.")
 
+async def cmd_config_show(manager: McpManager, args: List[str]):
+    """Display configuration."""
+    show_config_logic()
 
-@app.callback()
-def main(
-    version: bool = typer.Option(
-        False,
-        "--version",
-        "-v",
-        help="Show version and exit.",
-        callback=version_callback,
-        is_eager=True,
-    ),
-    config: Optional[Path] = CONFIG_OPTION,
-) -> None:
-    """
-    BlankOSL CLI - A Python MCP client for terminal-based tool execution.
+async def cmd_help(manager: McpManager, args: List[str]):
+    """Show available slash commands."""
+    table = Table(show_header=False, box=None)
+    table.add_column("Command", style="bold cyan")
+    table.add_column("Description", style="dim")
 
-    This CLI replaces Claude Desktop's MCP functionality, allowing you to:
+    for name, func in INTERACTIVE_COMMANDS.items():
+        doc = func.__doc__.split('\n')[0] if func.__doc__ else "No description"
+        table.add_row(f"/{name}", doc)
+    
+    console.print(table)
+    console.print("\n[dim]Any input without a '/' prefix is treated as a chat message.[/dim]")
 
-    • List available tools from MCP servers
-    • Manually call specific tools with JSON arguments
-    • Chat with an LLM that can invoke MCP tools automatically
-    """
-    # Config will be loaded by subcommands as needed
-    pass
+# --- Command Registry ---
+INTERACTIVE_COMMANDS: Dict[str, Callable[[McpManager, List[str]], Any]] = {
+    "list-all": cmd_tools_list_all,
+    "list": cmd_tools_list,
+    "call": cmd_call,
+    "config-show": cmd_config_show,
+    "config-mcp-path": cmd_config_show,
+    "help": cmd_help
+}
 
+# --- Interactive Session Loop ---
 
-# ============================================================================
-# CONFIG Subcommand
-# ============================================================================
-@app.command("config")
-def config_show(
-    config: Optional[Path] = CONFIG_OPTION,
-    validate: bool = typer.Option(
-        False,
-        "--validate",
-        help="Validate that all server commands exist.",
-    ),
-) -> None:
-    """
-    Show the current MCP server configuration.
+async def interactive_session():
+    manager = McpManager()
+    
+    console.print("[bold blue]Starting MCP Client Interactive Mode...[/bold blue]")
+    
+    with console.status("[bold green]Booting MCP Servers...[/bold green]"):
+        report = await manager.start_all()
 
-    Displays all configured MCP servers from Claude Desktop or custom config file.
-    """
-    # Determine config path
-    config_path = config if config else get_default_config_path()
+    # Create a status table
+    table = Table(show_header=True, header_style="bold magenta", box=None)
+    table.add_column("Server", style="cyan")
+    table.add_column("Status", justify="right")
 
-    if config_path is None:
-        console.print(
-            "[yellow]No configuration file found.[/yellow]\n\n"
-            "Expected locations:\n"
-            "  • macOS: ~/Library/Application Support/Claude/claude_desktop_config.json\n"
-            "  • Windows: %APPDATA%/Claude/claude_desktop_config.json\n"
-            "  • Linux: ~/.config/Claude/claude_desktop_config.json\n\n"
-            "Use [bold]--config[/bold] to specify a custom config file."
-        )
-        raise typer.Exit(1)
+    for s in report["success"]:
+        table.add_row(s["name"], "[green]✓ Ready[/green]")
+    for f in report["failed"]:
+        table.add_row(f["name"], f"[red]✗ Failed ({f['error']})[/red]")
 
-    console.print(f"[dim]Config file:[/dim] {config_path}\n")
+    if report["success"] or report["failed"]:
+        console.print(table)
+    else:
+        console.print("[yellow]No servers enabled in configuration.[/yellow]")
 
-    # Load and display config
-    mcp_config = load_config(config_path)
+    # Interactive loop
+    console.print("[dim]Type '/help' for commands, 'exit' to quit.[/dim]")
+    while True:
+        try:
+            user_input = Prompt.ask("\n[bold blue]mcp[/bold blue]")
+            if not user_input.strip():
+                continue
+            
+            # 1. Handle Slash Commands
+            if user_input.startswith("/"):
+                # Remove the slash and split
+                raw_cmd = user_input[1:]
+                parts = shlex.split(raw_cmd)
+                if not parts: continue
+                
+                cmd_name = parts[0].lower()
+                cmd_args = parts[1:]
 
-    if not mcp_config.servers:
-        console.print("[yellow]No MCP servers configured.[/yellow]")
+                if cmd_name in ("exit", "quit", "q"):
+                    break
+
+                if cmd_name in INTERACTIVE_COMMANDS:
+                    await INTERACTIVE_COMMANDS[cmd_name](manager, cmd_args)
+                else:
+                    console.print(f"[red]Unknown command:[/red] /{cmd_name}")
+            
+            # 2. Handle Chat Messages
+            else:
+                console.print("[yellow]LLM Chat is not yet implemented.[/yellow]")
+                console.print("[dim]Use slash commands (e.g. [cyan]/tools[/cyan]) to interact with MCP servers directly.[/dim]")
+
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            console.print(f"[red]System Error:[/red] {e}")
+
+    # Cleanup
+    with console.status("[bold red]Shutting down servers...[/bold red]"):
+        await manager.shutdown()
+    console.print("[green]Goodbye![/green]")
+
+# --- Main Entry Point ---
+
+def version_callback(value: bool):
+    if value:
+        console.print(f"Version: {__version__}")
         raise typer.Exit()
 
-    # Create table
-    table = Table(title="MCP Servers", show_header=True, header_style="bold blue")
-    table.add_column("Server", style="cyan")
-    table.add_column("Command")
-    table.add_column("Args")
-    table.add_column("Status", justify="center")
-
-    import shutil
-
-    for name, server in mcp_config.servers.items():
-        # Check if enabled
-        if not server.enabled:
-            status = "[dim]disabled[/dim]"
-        elif validate:
-            # Check if command exists
-            cmd_exists = shutil.which(server.command) is not None
-            status = "[green]✓[/green]" if cmd_exists else "[red]✗ not found[/red]"
-        else:
-            status = "[green]enabled[/green]"
-
-        args_str = " ".join(server.args[:3])
-        if len(server.args) > 3:
-            args_str += " ..."
-
-        table.add_row(name, server.command, args_str or "[dim]none[/dim]", status)
-
-    console.print(table)
-
-    # Show env vars if any
-    servers_with_env = [(n, s) for n, s in mcp_config.servers.items() if s.env]
-    if servers_with_env:
-        console.print("\n[bold]Environment Variables:[/bold]")
-        for name, server in servers_with_env:
-            console.print(f"  [cyan]{name}[/cyan]:")
-            for key, value in server.env.items():
-                # Mask sensitive values
-                display_value = value[:4] + "..." if len(value) > 8 else value
-                console.print(f"    {key}={display_value}")
-
-
-# ============================================================================
-# TOOLS Subcommand
-# ============================================================================
-tools_app = typer.Typer(
-    name="tools",
-    help="List and inspect available MCP tools.",
-    rich_markup_mode="rich",
-)
-app.add_typer(tools_app, name="tools")
-
-
-@tools_app.callback(invoke_without_command=True)
-def tools_main(
+@app.callback(invoke_without_command=True)
+def main(
     ctx: typer.Context,
-    config: Optional[Path] = CONFIG_OPTION,
-) -> None:
+    version: bool = typer.Option(False, "--version", "-v", callback=version_callback),
+):
     """
-    List and inspect available MCP tools from all connected servers.
-
-    Run without subcommands to list all available tools.
+    BlankOSL CLI - Managed MCP client.
     """
     if ctx.invoked_subcommand is None:
-        # Default behavior: list all tools
-        console.print(
-            Panel(
-                "[yellow]Tool listing not yet implemented.[/yellow]\n\n"
-                "This will show all available tools from connected MCP servers.",
-                title="[bold]Available Tools[/bold]",
-                border_style="blue",
-            )
-        )
+        asyncio.run(interactive_session())
 
-
-@tools_app.command("list")
-def tools_list(
-    config: Optional[Path] = CONFIG_OPTION,
-    server: Optional[str] = typer.Option(
-        None,
-        "--server",
-        "-s",
-        help="Filter tools by specific server name.",
-    ),
-    verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        "-V",
-        help="Show detailed tool information including parameters.",
-    ),
-) -> None:
-    """List all available tools from connected MCP servers."""
-    console.print("[yellow]Tool listing not yet implemented.[/yellow]")
-
-
-@tools_app.command("info")
-def tools_info(
-    tool_name: str = typer.Argument(..., help="Name of the tool to inspect."),
-    config: Optional[Path] = CONFIG_OPTION,
-) -> None:
-    """Show detailed information about a specific tool."""
-    console.print(f"[yellow]Tool info for '{tool_name}' not yet implemented.[/yellow]")
-
-
-# ============================================================================
-# CALL Subcommand
-# ============================================================================
-call_app = typer.Typer(
-    name="call",
-    help="Manually call MCP tools.",
-    rich_markup_mode="rich",
-)
-app.add_typer(call_app, name="call")
-
-
-@call_app.callback(invoke_without_command=True)
-def call_main(
-    ctx: typer.Context,
-    tool_name: Optional[str] = typer.Argument(None, help="Name of the tool to call."),
-    args: Optional[str] = typer.Option(
-        None,
-        "--args",
-        "-a",
-        help="JSON string of arguments to pass to the tool.",
-    ),
-    config: Optional[Path] = CONFIG_OPTION,
-    timeout: int = typer.Option(
-        30,
-        "--timeout",
-        "-t",
-        help="Timeout in seconds for tool execution.",
-    ),
-    confirm: bool = typer.Option(
-        True,
-        "--confirm/--no-confirm",
-        help="Prompt for confirmation before executing risky tools.",
-    ),
-) -> None:
-    """
-    Manually call an MCP tool with JSON arguments.
-
-    Example:
-        blankosl_cli call read_file --args '{"path": "/tmp/test.txt"}'
-    """
-    if tool_name is None:
-        console.print(
-            Panel(
-                "[yellow]Usage:[/yellow] blankosl_cli call <tool_name> --args '<json>'\n\n"
-                "Example:\n"
-                "  blankosl_cli call read_file --args '{\"path\": \"/tmp/test.txt\"}'",
-                title="[bold]Call Tool[/bold]",
-                border_style="blue",
-            )
-        )
-        raise typer.Exit()
-
-    console.print(f"[yellow]Tool call for '{tool_name}' not yet implemented.[/yellow]")
-    if args:
-        console.print(f"  Args: {args}")
-
-
-# ============================================================================
-# CHAT Subcommand
-# ============================================================================
-chat_app = typer.Typer(
-    name="chat",
-    help="Interactive chat with LLM-driven tool execution.",
-    rich_markup_mode="rich",
-)
-app.add_typer(chat_app, name="chat")
-
-
-@chat_app.callback(invoke_without_command=True)
-def chat_main(
-    ctx: typer.Context,
-    config: Optional[Path] = CONFIG_OPTION,
-    model: str = typer.Option(
-        "claude-3-5-sonnet-20241022",
-        "--model",
-        "-m",
-        help="LLM model to use for chat.",
-    ),
-    system_prompt: Optional[str] = typer.Option(
-        None,
-        "--system",
-        "-s",
-        help="Custom system prompt for the LLM.",
-    ),
-    auto_confirm: bool = typer.Option(
-        False,
-        "--auto-confirm",
-        "-y",
-        help="Automatically confirm tool executions without prompting.",
-    ),
-) -> None:
-    """
-    Start an interactive chat session with LLM-driven tool execution.
-
-    The LLM can discover and invoke MCP tools automatically based on your requests.
-    """
-    console.print(
-        Panel(
-            "[yellow]Interactive chat not yet implemented.[/yellow]\n\n"
-            "This will start a REPL where you can chat with an LLM\n"
-            "that has access to all MCP tools.",
-            title="[bold]Chat Mode[/bold]",
-            border_style="blue",
-        )
-    )
-
-
-# ============================================================================
-# Entry point for direct execution
-# ============================================================================
 if __name__ == "__main__":
     app()

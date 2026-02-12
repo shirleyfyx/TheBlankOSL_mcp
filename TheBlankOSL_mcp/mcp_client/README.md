@@ -1,15 +1,12 @@
 # BlankOSL CLI
 
-A Python CLI MCP client that locally replaces Claude Desktop's MCP functionality.
+A Python CLI MCP client that locally replaces Claude Desktop's MCP functionality while managing configurations globally.
 
 ## Installation
 
-### From the project root (recommended)
+### From the project root
 
 ```bash
-# Activate your conda environment
-conda activate blankosl
-
 # Install the package in development mode
 pip install -e ./TheBlankOSL_mcp
 ```
@@ -22,19 +19,24 @@ blankosl_cli --version
 
 ## Commands
 
+### `blankosl_cli`
+
+Enter interactive mode.
+
+### `blankosl_cli --help`
+
+Get a list of most up-to-date cli commands.
+
 ### `blankosl_cli config`
 
-Show the current MCP server configuration from Claude Desktop.
+Manage and view the MCP server configuration.
 
 ```bash
-# Show all configured servers
-blankosl_cli config
+# Set a new global mcp configuration path (persists to ~/.blankosl_cli/settings.json)
+blankosl_cli config --mcp-path /path/to/config.json
 
-# Validate that all server commands exist
-blankosl_cli config --validate
-
-# Use a custom config file
-blankosl_cli config --config /path/to/config.json
+# Show the client config.
+blankosl_cli config --show
 ```
 
 ### `blankosl_cli tools`
@@ -42,65 +44,34 @@ blankosl_cli config --config /path/to/config.json
 List and inspect available MCP tools.
 
 ```bash
-# List all available tools
-blankosl_cli tools list
+# List all available tools with optional name filter
+blankosl_cli tools list-all [--server weather]
 
-# Filter by server
-blankosl_cli tools list --server weather
-
-# Show detailed info for a specific tool
-blankosl_cli tools info <tool_name>
+# Show detailed schema information for a specific tool
+blankosl_cli tools list <tool_name>
 ```
 
 ### `blankosl_cli call`
 
-Manually call an MCP tool with JSON arguments.
+Manually execute an MCP tool with JSON arguments.
 
 ```bash
-# Call a tool with arguments
+# Call a tool with JSON arguments
 blankosl_cli call read_file --args '{"path": "/tmp/test.txt"}'
-
-# With timeout
-blankosl_cli call slow_tool --args '{}' --timeout 60
-```
-
-### `blankosl_cli chat`
-
-Start an interactive chat session with LLM-driven tool execution.
-
-```bash
-# Start chat with default model
-blankosl_cli chat
-
-# Use a specific model
-blankosl_cli chat --model claude-3-5-sonnet-20241022
-
-# Auto-confirm tool executions
-blankosl_cli chat --auto-confirm
 ```
 
 ## Configuration
 
-The CLI automatically detects Claude Desktop's config file:
+The CLI manages its own state in `~/.blankosl_cli/settings.json`. It resolves the MCP configuration using the following priority:
+
+1. **Global Setting**: The MCP path explicitly set via `blankosl_cli config --mcp-path`.
+2. **System Default**: If no global path is set, it searches for the Claude Desktop config:
 
 | Platform | Default Path |
 |----------|--------------|
 | macOS    | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | Windows  | `%APPDATA%/Claude/claude_desktop_config.json` |
 | Linux    | `~/.config/Claude/claude_desktop_config.json` |
-
-You can also specify a custom config file:
-
-```bash
-blankosl_cli --config /path/to/config.json <command>
-```
-
-Or set the `BLANKOSL_CONFIG` environment variable:
-
-```bash
-export BLANKOSL_CONFIG=/path/to/config.json
-blankosl_cli config
-```
 
 ## Development
 
