@@ -53,6 +53,12 @@
             "args": [
                 "/app/TheBlankOSL_mcp/mcp_servers/pdf_tools.py"
             ]
+        },
+        "contacts_manager": {
+            "command": "python",
+            "args": [
+                "/app/TheBlankOSL_mcp/mcp_servers/contacts_manager.py"
+            ]
         }
     },
     "isDxtAutoUpdatesEnabled": false,

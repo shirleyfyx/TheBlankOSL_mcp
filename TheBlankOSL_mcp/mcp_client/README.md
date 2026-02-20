@@ -4,7 +4,19 @@ A Python CLI MCP client that locally replaces Claude Desktop's MCP functionality
 
 ## Installation
 
-### From the project root
+From the project root, choose one of the options below.
+
+### Option A: Using Docker
+
+Make sure the container is running, run the following command in the terminal:
+
+```bash
+docker exec -it mcp-shared bash
+```
+
+Now you can run the blankosl cli in your terminal!
+
+### Option B: Local 
 
 ```bash
 # Install the package in development mode
