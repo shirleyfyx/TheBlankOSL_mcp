@@ -72,9 +72,26 @@ Manually execute an MCP tool with JSON arguments.
 blankosl_cli call read_file --args '{"path": "/tmp/test.txt"}'
 ```
 
+## LLM API key
+
+The LLM API keys are stored in **CLI config**, so you can set and change them at runtime:
+
+Google Gemini
+
+```bash
+blankosl_cli config --gemini-api-key <your_key>
+```
+
+Get a key: [Gemini API key](https://ai.google.dev/gemini-api/docs/api-key).
+
 ## Configuration
 
-The CLI manages its own state in `~/.blankosl_cli/settings.json`. It resolves the MCP configuration using the following priority:
+The CLI stores its state in **`~/.blankosl_cli/settings.json`** (the “CLI config” file). That file holds:
+- MCP config path
+- Default LLM backend
+- **Gemini API key** (masked)
+
+View settings in the terminal: `blankosl_cli config --show`. It resolves the MCP configuration using the following priority:
 
 1. **Global Setting**: The MCP path explicitly set via `blankosl_cli config --mcp-path`.
 2. **System Default**: If no global path is set, it searches for the Claude Desktop config:
