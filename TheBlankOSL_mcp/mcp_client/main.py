@@ -92,8 +92,7 @@ async def cmd_switch_llm(manager: McpManager, args: List[str], current_llm_id: l
         console.print(f"[red]Unknown LLM:[/red] {backend_id}. Use [cyan]/list_llm[/cyan].")
         return
     try:
-        kwargs = {"api_key": settings_mgr.load().gemini_api_key} if backend_id == "gemini" else {}
-        get_client(backend_id, **kwargs)
+        get_client(backend_id)
     except ValueError as e:
         console.print(f"[red]Cannot use {backend_id}:[/red] {e}")
         return
@@ -160,6 +159,10 @@ async def interactive_session():
     console.print("Type '/list_llm' to see all available LLM models.")
     console.print("Type '/help' for commands, '/exit' to quit.")
 
+    chat_history: List[dict] = []
+    cached_client: Any = None
+    cached_cid: str = ""
+
     while True:
         try:
             display_name = get_backend_name(current_llm_id[0]) or current_llm_id[0] or "None"
@@ -195,15 +198,17 @@ async def interactive_session():
                     console.print("[yellow]No LLM selected.[/yellow] Use [cyan]/switch_llm <id>[/cyan] (see [cyan]/list_llm[/cyan]).")
                     continue
                 try:
-                    kwargs = {"api_key": settings_mgr.load().gemini_api_key} if cid == "gemini" else {}
-                    client = get_client(cid, **kwargs)
+                    if cached_client is None or cached_cid != cid:
+                        cached_client = get_client(cid)
+                        cached_cid = cid
+                    client = cached_client
                 except ValueError as e:
                     console.print(f"[red]{e}[/red]")
                     continue
+                chat_history.append({"role": "user", "content": user_input.strip()})
                 with console.status("[dim]Thinking...[/dim]"):
-                    reply = await client.chat([
-                        {"role": "user", "content": user_input.strip()}
-                    ])
+                    reply = await client.chat(chat_history)
+                chat_history.append({"role": "assistant", "content": reply})
                 console.print(reply)
 
         except KeyboardInterrupt:
