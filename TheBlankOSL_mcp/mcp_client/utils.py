@@ -51,7 +51,7 @@ def load_mcp_config() -> McpConfig:
     if not path or not path.exists():
         console.print(f"[red]Error:[/red] MCP config not found.")
         console.print(f"[dim]Checked: {stored if stored else 'System Defaults'}[/dim]")
-        console.print("[yellow]Hint:[/yellow] Run: [bold]blankosl_cli config -mp /app/TheBlankOSL_mcp/mcp_client/claude_desktop_config.json[/bold]")
+        console.print("[yellow]Hint:[/yellow] Run: [bold]blankosl_cli config -mp /app/TheBlankOSL_mcp/claude_desktop_config.json[/bold]")
         raise typer.Exit(1)
 
     try:

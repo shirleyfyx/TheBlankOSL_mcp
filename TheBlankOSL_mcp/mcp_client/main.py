@@ -114,10 +114,10 @@ async def interactive_session():
         console.print("[yellow]No servers enabled in configuration.[/yellow]")
 
     # Interactive loop
-    console.print("[dim]Type '/help' for commands, 'exit' to quit.[/dim]")
+    console.print("[dim]Type '/help' for commands, '/exit' to quit.[/dim]")
     while True:
         try:
-            user_input = Prompt.ask("\n[bold blue]mcp[/bold blue]")
+            user_input = Prompt.ask("\n[bold blue]BlankOSL[/bold blue]")
             if not user_input.strip():
                 continue
             
