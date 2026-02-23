@@ -33,8 +33,12 @@ def show_config_logic():
     table_settings.add_column("Setting")
     table_settings.add_column("Value")
 
+    # Mask any API key / secret field when displaying
     for key, value in settings_dict.items():
-        display_value = str(value) if value is not None else "[dim]Not Set[/dim]"
+        if "api_key" in key or key.endswith("_secret"):
+            display_value = "*** set ***" if value else "Not Set"
+        else:
+            display_value = str(value) if value is not None else "[dim]Not Set[/dim]"
         table_settings.add_row(key, display_value)
         
     console.print(table_settings)
@@ -75,6 +79,9 @@ def main(
     mcp_path: Optional[Path] = typer.Option(
         None, "--mcp-path", "-mp", help="Update the global MCP config path and exit."
     ),
+    gemini_api_key: Optional[str] = typer.Option(
+        None, "--gemini-api-key", help="Set the Gemini API key in CLI config and exit."
+    ),
     show_settings: bool = typer.Option(
         False, "--show", help="Display all CLI global settings and exit."
     ),
@@ -92,7 +99,13 @@ def main(
             raise typer.Exit(1)
         raise typer.Exit()
 
-    # 2. Action: Show settings (or default behavior if no args provided)
+    # 2. Action: Set Gemini API key
+    if gemini_api_key is not None:
+        settings_mgr.update_gemini_api_key(gemini_api_key)
+        console.print("[green]Gemini API key saved to CLI config.[/green]")
+        raise typer.Exit()
+
+    # 3. Action: Show settings (or default behavior if no args provided)
     if show_settings:
         show_config_logic()
         raise typer.Exit()

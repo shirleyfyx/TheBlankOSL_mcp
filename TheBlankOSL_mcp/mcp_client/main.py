@@ -9,11 +9,12 @@ from rich.table import Table
 
 # Import your modules
 from . import __version__
-from .utils import console, load_mcp_config
+from .utils import console, load_mcp_config, settings_mgr
 from .mcp_manager import McpManager
 from .commands import config as config_cmd
 from .commands import tools as tools_cmd
 from .commands import call as call_cmd
+from .llm import get_client, list_backends, get_backend_name
 
 # Import reusable logic from subcommands
 from .commands.tools import list_tools_logic, info_tool_logic
@@ -65,6 +66,40 @@ async def cmd_config_show(manager: McpManager, args: List[str]):
     """Display configuration."""
     show_config_logic()
 
+async def cmd_list_llm(manager: McpManager, args: List[str]):
+    """List all available LLM models."""
+    backends = list_backends()
+    if not backends:
+        console.print("[yellow]No LLM backends available.[/yellow]")
+        return
+    table = Table(title="Available LLMs", show_header=True, header_style="bold cyan")
+    table.add_column("ID", style="cyan")
+    table.add_column("Name")
+    for b in backends:
+        table.add_row(b["id"], b["name"])
+    console.print(table)
+    console.print("To use a different model, run /switch_llm <id>.")
+
+async def cmd_switch_llm(manager: McpManager, args: List[str], current_llm_id: list) -> None:
+    """Change the current LLM. Usage: /switch_llm <id>"""
+    if not args:
+        console.print("[red]Usage:[/red] /switch_llm <id>  (e.g. /switch_llm gemini)")
+        console.print("[dim]Use /list_llm to see available IDs.[/dim]")
+        return
+    backend_id = args[0].lower()
+    name = get_backend_name(backend_id)
+    if name is None:
+        console.print(f"[red]Unknown LLM:[/red] {backend_id}. Use [cyan]/list_llm[/cyan].")
+        return
+    try:
+        get_client(backend_id)
+    except ValueError as e:
+        console.print(f"[red]Cannot use {backend_id}:[/red] {e}")
+        return
+    current_llm_id[0] = backend_id
+    settings_mgr.update_default_llm(backend_id)
+    console.print(f"[green]Now using:[/green] {name}")
+
 async def cmd_help(manager: McpManager, args: List[str]):
     """Show available slash commands."""
     table = Table(show_header=False, box=None)
@@ -74,25 +109,30 @@ async def cmd_help(manager: McpManager, args: List[str]):
     for name, func in INTERACTIVE_COMMANDS.items():
         doc = func.__doc__.split('\n')[0] if func.__doc__ else "No description"
         table.add_row(f"/{name}", doc)
-    
+    table.add_row("/list_llm", "List available LLM models.")
+    table.add_row("/switch_llm <id>", "Switch to another LLM (e.g. /switch_llm gemini)")
     console.print(table)
     console.print("\n[dim]Any input without a '/' prefix is treated as a chat message.[/dim]")
 
 # --- Command Registry ---
-INTERACTIVE_COMMANDS: Dict[str, Callable[[McpManager, List[str]], Any]] = {
+INTERACTIVE_COMMANDS: Dict[str, Callable[..., Any]] = {
     "list-all": cmd_tools_list_all,
     "list": cmd_tools_list,
     "call": cmd_call,
     "config-show": cmd_config_show,
     "config-mcp-path": cmd_config_show,
-    "help": cmd_help
+    "list_llm": cmd_list_llm,
+    "help": cmd_help,
 }
 
 # --- Interactive Session Loop ---
 
 async def interactive_session():
     manager = McpManager()
-    
+    # Current LLM backend id (mutable so /switch_llm can update it)
+    saved_llm = (settings_mgr.load().default_llm or "").strip()
+    current_llm_id: List[str] = [saved_llm if get_backend_name(saved_llm) else "gemini"]
+
     console.print("[bold blue]Starting MCP Client Interactive Mode...[/bold blue]")
     
     with console.status("[bold green]Booting MCP Servers...[/bold green]"):
@@ -113,11 +153,21 @@ async def interactive_session():
     else:
         console.print("[yellow]No servers enabled in configuration.[/yellow]")
 
-    # Interactive loop
-    console.print("[dim]Type '/help' for commands, '/exit' to quit.[/dim]")
+    model_name = get_backend_name(current_llm_id[0]) or current_llm_id[0] or "None"
+    console.print()
+    console.print(f"[bold green]Currently using: {model_name}[/bold green]")
+    console.print("Type '/list_llm' to see all available LLM models.")
+    console.print("Type '/help' for commands, '/exit' to quit.")
+
+    chat_history: List[dict] = []
+    cached_client: Any = None
+    cached_cid: str = ""
+
     while True:
         try:
-            user_input = Prompt.ask("\n[bold blue]BlankOSL[/bold blue]")
+            display_name = get_backend_name(current_llm_id[0]) or current_llm_id[0] or "None"
+            prompt_label = f"BLANKOSL ({display_name})"
+            user_input = Prompt.ask(f"\n[bold blue]{prompt_label}[/bold blue]")
             if not user_input.strip():
                 continue
             
@@ -126,23 +176,40 @@ async def interactive_session():
                 # Remove the slash and split
                 raw_cmd = user_input[1:]
                 parts = shlex.split(raw_cmd)
-                if not parts: continue
-                
+                if not parts:
+                    continue
                 cmd_name = parts[0].lower()
                 cmd_args = parts[1:]
 
                 if cmd_name in ("exit", "quit", "q"):
                     break
 
-                if cmd_name in INTERACTIVE_COMMANDS:
+                if cmd_name == "switch_llm":
+                    await cmd_switch_llm(manager, cmd_args, current_llm_id)
+                elif cmd_name in INTERACTIVE_COMMANDS:
                     await INTERACTIVE_COMMANDS[cmd_name](manager, cmd_args)
                 else:
                     console.print(f"[red]Unknown command:[/red] /{cmd_name}")
             
             # 2. Handle Chat Messages
             else:
-                console.print("[yellow]LLM Chat is not yet implemented.[/yellow]")
-                console.print("[dim]Use slash commands (e.g. [cyan]/tools[/cyan]) to interact with MCP servers directly.[/dim]")
+                cid = current_llm_id[0]
+                if not cid:
+                    console.print("[yellow]No LLM selected.[/yellow] Use [cyan]/switch_llm <id>[/cyan] (see [cyan]/list_llm[/cyan]).")
+                    continue
+                try:
+                    if cached_client is None or cached_cid != cid:
+                        cached_client = get_client(cid)
+                        cached_cid = cid
+                    client = cached_client
+                except ValueError as e:
+                    console.print(f"[red]{e}[/red]")
+                    continue
+                chat_history.append({"role": "user", "content": user_input.strip()})
+                with console.status("[dim]Thinking...[/dim]"):
+                    reply = await client.chat(chat_history)
+                chat_history.append({"role": "assistant", "content": reply})
+                console.print(reply)
 
         except KeyboardInterrupt:
             break
