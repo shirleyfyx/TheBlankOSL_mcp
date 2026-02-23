@@ -14,7 +14,8 @@ class CliSettings:
         auto_confirm: Whether to skip confirmation prompts for tool calls.
     """
     mcp_config_path: Optional[str] = None
-    default_model: str = "claude-3-5-sonnet-20241022"
+    default_llm: str = "Google Gemini"
+    gemini_api_key: str = ""
     auto_confirm: bool = False
 
 class SettingsManager:
@@ -76,4 +77,16 @@ class SettingsManager:
         """
         settings = self.load()
         settings.mcp_config_path = str(path.absolute())
+        self.save(settings)
+
+    def update_default_llm(self, backend_id: str) -> None:
+        """Set the default LLM backend and persist."""
+        settings = self.load()
+        settings.default_llm = backend_id
+        self.save(settings)
+
+    def update_gemini_api_key(self, api_key: str) -> None:
+        """Set the Gemini API key and persist (CLI config only)."""
+        settings = self.load()
+        settings.gemini_api_key = (api_key or "").strip()
         self.save(settings)
