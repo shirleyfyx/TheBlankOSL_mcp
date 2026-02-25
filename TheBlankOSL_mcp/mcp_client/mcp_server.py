@@ -14,6 +14,8 @@ class McpServer:
         self.process: Optional[asyncio.subprocess.Process] = None
         self.transport: Optional[McpTransport] = None
         self._listener_task: Optional[asyncio.Task] = None
+        self._stderr_task: Optional[asyncio.Task] = None
+        self._stderr_buffer: List[str] = []
         self.capabilities: Dict[str, Any] = {}
 
     async def start(self):
@@ -41,20 +43,29 @@ class McpServer:
             raise FileNotFoundError(f"Command not found: {self.config.command}")
 
         # Strict check on the local variable 'process'
-        if not process.stdin or not process.stdout:
+        if not process.stdin or not process.stdout or not process.stderr:
             raise RuntimeError(f"Failed to open pipes for {self.name}")
 
-        # 2. Attach Transport & Start Listener
+        # 2. Start stderr reader to capture errors
+        self._stderr_buffer = []
+        self._stderr_task = asyncio.create_task(self._read_stderr(process.stderr))
+
+        # 3. Attach Transport & Start Listener
         transport = McpTransport(process.stdout, process.stdin)
         self.transport = transport
         self._listener_task = asyncio.create_task(transport.start_listening())
 
-        # 3. Initialize (Handshake)
+        # 4. Initialize (Handshake)
         try:
             await self._initialize()
         except Exception as e:
+            # Include stderr output in error message if available
+            stderr_msg = self._get_stderr_summary()
+            error_msg = f"Handshake failed for {self.name}: {e}"
+            if stderr_msg:
+                error_msg += f"\nServer stderr: {stderr_msg}"
             await self.stop()
-            raise RuntimeError(f"Handshake failed for {self.name}: {e}")
+            raise RuntimeError(error_msg)
 
     async def _initialize(self):
         """Internal method to perform MCP handshake."""
@@ -76,6 +87,24 @@ class McpServer:
 
         # B. Notify initialized
         await transport.send_notification("notifications/initialized", {})
+
+    async def _read_stderr(self, stderr: asyncio.StreamReader):
+        """Background task to read stderr and buffer it."""
+        try:
+            while True:
+                line = await stderr.readline()
+                if not line:
+                    break
+                self._stderr_buffer.append(line.decode('utf-8', errors='replace').rstrip())
+        except Exception:
+            pass  # Process may have terminated
+
+    def _get_stderr_summary(self, max_lines: int = 5) -> str:
+        """Get a summary of stderr output."""
+        if not self._stderr_buffer:
+            return ""
+        lines = self._stderr_buffer[-max_lines:] if len(self._stderr_buffer) > max_lines else self._stderr_buffer
+        return "\n".join(lines)
 
     async def list_tools(self) -> List[Dict[str, Any]]:
         """Fetch tools available on this server."""
@@ -114,13 +143,21 @@ class McpServer:
                 await self._listener_task
             except asyncio.CancelledError:
                 pass
+
+        # 2. Cancel stderr reader
+        if self._stderr_task:
+            self._stderr_task.cancel()
+            try:
+                await self._stderr_task
+            except asyncio.CancelledError:
+                pass
         
-        # 2. Close pipes
+        # 3. Close pipes
         transport = self.transport
         if transport:
             await transport.close()
 
-        # 3. Kill process
+        # 4. Kill process
         process = self.process
         if process and process.returncode is None:
             process.terminate()

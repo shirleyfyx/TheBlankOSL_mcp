@@ -13,7 +13,7 @@ from .utils import console, load_mcp_config, settings_mgr
 from .mcp_manager import McpManager
 from .commands import config as config_cmd
 from .commands import tools as tools_cmd
-from .commands import call as call_cmd
+from .commands.call import main as call_main
 from .llm import get_client, list_backends, get_backend_name
 
 # Import reusable logic from subcommands
@@ -31,7 +31,7 @@ app = typer.Typer(
 
 app.add_typer(config_cmd.app, name="config")
 app.add_typer(tools_cmd.app, name="tools")
-app.add_typer(call_cmd.app, name="call")
+app.command(name="call")(call_main)
 
 # --- Interactive Command Handlers ---
 
@@ -51,16 +51,33 @@ async def cmd_call(manager: McpManager, args: List[str]):
     """Execute a tool. Usage: /call <tool_name> [json_args]"""
     if not args:
         console.print("[red]Usage:[/red] /call <tool_name> [json_args]")
+        console.print("[dim]Example: /call get_alerts '{\"state\":\"CA\"}'[/dim]")
+        console.print("[dim]Note: In interactive mode, don't use --args flag. Just provide JSON directly.[/dim]")
         return
 
     tool_name = args[0]
-    args_str = " ".join(args[1:]) if len(args) > 1 else "{}"
+    
+    # Filter out CLI flags that users might accidentally include
+    json_args = [arg for arg in args[1:] if arg not in ('--args', '-a')]
+    
+    # If no JSON provided, use empty dict
+    if not json_args:
+        args_str = "{}"
+    else:
+        # Join remaining arguments and try to parse as JSON
+        args_str = " ".join(json_args)
+        # If it looks like they used --args flag, show helpful error
+        if '--args' in args or '-a' in args:
+            console.print("[yellow]Note:[/yellow] In interactive mode, don't use --args or -a flags.")
+            console.print("[yellow]Just provide the JSON directly:[/yellow] /call <tool_name> '<json>'")
 
     try:
         tool_args = json.loads(args_str)
         await call_tool_logic(manager, tool_name, tool_args)
-    except json.JSONDecodeError:
-        console.print("[red]Error:[/red] Arguments must be valid JSON.")
+    except json.JSONDecodeError as e:
+        console.print(f"[red]Error:[/red] Invalid JSON: {e}")
+        console.print(f"[dim]You provided: {args_str}[/dim]")
+        console.print("[yellow]Example:[/yellow] /call get_alerts '{\"state\":\"CA\"}'")
 
 async def cmd_config_show(manager: McpManager, args: List[str]):
     """Display configuration."""
