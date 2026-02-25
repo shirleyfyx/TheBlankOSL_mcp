@@ -8,6 +8,8 @@ from rich.syntax import Syntax
 from ..utils import console
 from ..mcp_manager import McpManager
 
+# Note: This app is not used when registered directly in main.py
+# It's kept for potential future use or if we want to add subcommands
 app = typer.Typer(
     help="Manually call MCP tools.",
     rich_markup_mode="rich"
@@ -63,24 +65,16 @@ async def _run_cli_call(tool_name: str, args_json: Optional[str]):
         finally:
             await manager.shutdown()
 
-@app.callback(invoke_without_command=True)
+# This function is registered directly in main.py, not as part of the Typer app
 def main(
-    ctx: typer.Context,
-    tool_name: Optional[str] = typer.Argument(None, help="The name of the tool to execute."),
+    tool_name: str = typer.Argument(..., help="The name of the tool to execute."),
     args: Optional[str] = typer.Option(None, "--args", "-a", help="JSON string of arguments."),
 ) -> None:
     """
     Manually call an MCP tool with JSON arguments.
+    
+    Example:
+        blankosl_cli call get_alerts --args '{"state": "CA"}'
     """
-    if tool_name is None:
-        console.print(
-            Panel(
-                "[yellow]Usage:[/yellow] blankosl_cli call <tool_name> --args '<json>'",
-                title="[bold]Call Tool[/bold]",
-                border_style="blue",
-            )
-        )
-        raise typer.Exit()
-
     # Bridge Sync (Typer) to Async (Manager)
     asyncio.run(_run_cli_call(tool_name, args))

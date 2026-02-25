@@ -1,6 +1,6 @@
 import asyncio
 import typer
-from typing import Optional
+from typing import Optional, Dict, Any
 from rich.table import Table
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -13,10 +13,19 @@ app = typer.Typer(help="Inspect and list available MCP tools.", rich_markup_mode
 
 # --- REUSABLE CORE LOGIC ---
 
-async def list_tools_logic(manager: McpManager, server_filter: Optional[str] = None):
+async def list_tools_logic(manager: McpManager, server_filter: Optional[str] = None, startup_report: Optional[Dict[str, Any]] = None):
     """
     Fetches all the server tools and display them.
     """
+    # Show startup errors if any
+    if startup_report:
+        failed = startup_report.get("failed", [])
+        if failed:
+            console.print("[yellow]Warning: Some servers failed to start:[/yellow]")
+            for failure in failed:
+                console.print(f"  [red]✗[/red] {failure['name']}: {failure['error']}")
+            console.print()
+    
     try:
         all_tools = await manager.get_all_tools()
     except Exception as e:
@@ -33,6 +42,8 @@ async def list_tools_logic(manager: McpManager, server_filter: Optional[str] = N
     if not has_tools:
         msg = f"[yellow]No tools found for server:[/yellow] {server_filter}" if server_filter else "[yellow]No tools found on enabled servers.[/yellow]"
         console.print(msg)
+        if startup_report and startup_report.get("failed"):
+            console.print("\n[dim]Tip: Check the errors above. Servers may have failed to start due to incorrect paths or missing dependencies.[/dim]")
         return
 
     # Build Table
@@ -103,10 +114,11 @@ def list_cmd(
     """
     async def _run():
         manager = McpManager()
+        startup_report = None
         with console.status("[bold green]Connecting to servers..."):
             try:
-                await manager.start_all()
-                await list_tools_logic(manager, server)
+                startup_report = await manager.start_all()
+                await list_tools_logic(manager, server, startup_report)
             finally:
                 await manager.shutdown()
 

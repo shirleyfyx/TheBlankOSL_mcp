@@ -35,9 +35,18 @@ class McpManager:
 
         for name, result in zip(tasks.keys(), results):
             if isinstance(result, Exception):
+                # Try to get stderr from the server if it exists
+                error_msg = f"{type(result).__name__}: {str(result)}"
+                if name in self.sessions:
+                    server = self.sessions[name]
+                    if hasattr(server, '_get_stderr_summary'):
+                        stderr = server._get_stderr_summary()
+                        if stderr:
+                            error_msg += f"\n  Stderr: {stderr}"
+                
                 results_summary["failed"].append({
                     "name": name,
-                    "error": f"{type(result).__name__}: {str(result)}"
+                    "error": error_msg
                 })
                 # Remove from active sessions
                 if name in self.sessions:
