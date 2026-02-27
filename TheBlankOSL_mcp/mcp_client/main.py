@@ -97,7 +97,7 @@ async def cmd_list_llm(manager: McpManager, args: List[str]):
     console.print(table)
     console.print("To use a different model, run /switch_llm <id>.")
 
-async def cmd_switch_llm(manager: McpManager, args: List[str], current_llm_id: list) -> None:
+async def cmd_switch_llm(manager: McpManager, args: List[str]) -> None:
     """Change the current LLM. Usage: /switch_llm <id>"""
     if not args:
         console.print("[red]Usage:[/red] /switch_llm <id>  (e.g. /switch_llm gemini)")
@@ -113,7 +113,8 @@ async def cmd_switch_llm(manager: McpManager, args: List[str], current_llm_id: l
     except ValueError as e:
         console.print(f"[red]Cannot use {backend_id}:[/red] {e}")
         return
-    current_llm_id[0] = backend_id
+        
+    # Persist directly to config!
     settings_mgr.update_default_llm(backend_id)
     console.print(f"[green]Now using:[/green] {name}")
 
@@ -126,19 +127,18 @@ async def cmd_help(manager: McpManager, args: List[str]):
     for name, func in INTERACTIVE_COMMANDS.items():
         doc = func.__doc__.split('\n')[0] if func.__doc__ else "No description"
         table.add_row(f"/{name}", doc)
-    table.add_row("/list_llm", "List available LLM models.")
-    table.add_row("/switch_llm <id>", "Switch to another LLM (e.g. /switch_llm gemini)")
     console.print(table)
     console.print("\n[dim]Any input without a '/' prefix is treated as a chat message.[/dim]")
 
 # --- Command Registry ---
-INTERACTIVE_COMMANDS: Dict[str, Callable[..., Any]] = {
+INTERACTIVE_COMMANDS: Dict[str, Callable[[McpManager, List[str]], Any]] = {
     "list-all": cmd_tools_list_all,
     "list": cmd_tools_list,
     "call": cmd_call,
     "config-show": cmd_config_show,
     "config-mcp-path": cmd_config_show,
     "list_llm": cmd_list_llm,
+    "switch_llm": cmd_switch_llm,
     "help": cmd_help,
 }
 
@@ -146,9 +146,11 @@ INTERACTIVE_COMMANDS: Dict[str, Callable[..., Any]] = {
 
 async def interactive_session():
     manager = McpManager()
-    # Current LLM backend id (mutable so /switch_llm can update it)
-    saved_llm = (settings_mgr.load().default_llm or "").strip()
-    current_llm_id: List[str] = [saved_llm if get_backend_name(saved_llm) else "gemini"]
+    
+    # Helper to always fetch the latest LLM from config
+    def get_current_llm() -> str:
+        saved = settings_mgr.load().default_llm
+        return saved.strip() if saved and get_backend_name(saved.strip()) else "gemini"
 
     console.print("[bold blue]Starting MCP Client Interactive Mode...[/bold blue]")
     
@@ -170,10 +172,11 @@ async def interactive_session():
     else:
         console.print("[yellow]No servers enabled in configuration.[/yellow]")
 
-    model_name = get_backend_name(current_llm_id[0]) or current_llm_id[0] or "None"
+    # Initial display
+    initial_llm = get_current_llm()
+    model_name = get_backend_name(initial_llm) or initial_llm
     console.print()
     console.print(f"[bold green]Currently using: {model_name}[/bold green]")
-    console.print("Type '/list_llm' to see all available LLM models.")
     console.print("Type '/help' for commands, '/exit' to quit.")
 
     chat_history: List[dict] = []
@@ -182,15 +185,18 @@ async def interactive_session():
 
     while True:
         try:
-            display_name = get_backend_name(current_llm_id[0]) or current_llm_id[0] or "None"
+            # Re-fetch config value on every loop iteration
+            current_cid = get_current_llm()
+            display_name = get_backend_name(current_cid) or current_cid
+            
             prompt_label = f"BLANKOSL ({display_name})"
             user_input = Prompt.ask(f"\n[bold blue]{prompt_label}[/bold blue]")
+            
             if not user_input.strip():
                 continue
             
             # 1. Handle Slash Commands
             if user_input.startswith("/"):
-                # Remove the slash and split
                 raw_cmd = user_input[1:]
                 parts = shlex.split(raw_cmd)
                 if not parts:
@@ -201,27 +207,28 @@ async def interactive_session():
                 if cmd_name in ("exit", "quit", "q"):
                     break
 
-                if cmd_name == "switch_llm":
-                    await cmd_switch_llm(manager, cmd_args, current_llm_id)
-                elif cmd_name in INTERACTIVE_COMMANDS:
+                # The awkward if-branch is gone! Everything routes dynamically.
+                if cmd_name in INTERACTIVE_COMMANDS:
                     await INTERACTIVE_COMMANDS[cmd_name](manager, cmd_args)
                 else:
                     console.print(f"[red]Unknown command:[/red] /{cmd_name}")
             
             # 2. Handle Chat Messages
             else:
-                cid = current_llm_id[0]
-                if not cid:
-                    console.print("[yellow]No LLM selected.[/yellow] Use [cyan]/switch_llm <id>[/cyan] (see [cyan]/list_llm[/cyan]).")
+                if not current_cid:
+                    console.print("[yellow]No LLM selected.[/yellow] Use [cyan]/switch_llm <id>[/cyan].")
                     continue
+                    
                 try:
-                    if cached_client is None or cached_cid != cid:
-                        cached_client = get_client(cid)
-                        cached_cid = cid
+                    # Update client cache only if the config changed
+                    if cached_client is None or cached_cid != current_cid:
+                        cached_client = get_client(current_cid)
+                        cached_cid = current_cid
                     client = cached_client
                 except ValueError as e:
                     console.print(f"[red]{e}[/red]")
                     continue
+                
                 chat_history.append({"role": "user", "content": user_input.strip()})
                 with console.status("[dim]Thinking...[/dim]"):
                     reply = await client.chat(chat_history)
