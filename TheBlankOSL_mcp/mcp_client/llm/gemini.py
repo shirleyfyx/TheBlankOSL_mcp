@@ -1,10 +1,27 @@
 import asyncio
+import re
 from typing import Any
 
 from google import genai
 from google.genai import types
 
 from .base import BaseLLMClient
+
+
+def _format_gemini_error(ex: Exception) -> str:
+    """Turn Gemini API errors into a short, readable message."""
+    msg = str(ex)
+    if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+        m = re.search(r"[Pp]lease retry in (\d+(?:\.\d+)?)\s*s", msg)
+        if m:
+            sec = float(m.group(1))
+            return f"Gemini rate limit reached. Wait {int(sec)}s and try again, or check your quota: https://ai.google.dev/gemini-api/docs/rate-limits"
+        return "Gemini rate limit exceeded. Wait a minute or check your plan/billing: https://ai.google.dev/gemini-api/docs/rate-limits"
+    if "401" in msg or "UNAUTHENTICATED" in msg:
+        return "Gemini API key invalid or missing. Run: blankosl_cli config --gemini-api-key <your_key>"
+    if "400" in msg or "INVALID_ARGUMENT" in msg:
+        return f"Gemini request error: {msg[:200]}"
+    return f"[Gemini error: {msg[:300]}]"
 
 def _get_api_key(api_key: str | None) -> str:
     """Require API key from caller (CLI config). Raises if missing."""
@@ -14,6 +31,14 @@ def _get_api_key(api_key: str | None) -> str:
         )
     return api_key.strip()
 
+
+def _make_part(text: str):
+    """Build a Part from text without Part.from_text() (avoids SDK signature issues)."""
+    part = types.Part()
+    setattr(part, "text", text)
+    return part
+
+
 def _messages_to_sdk_history(messages: list[dict[str, Any]]) -> list[types.Content]:
     """Convert our [{role, content}, ...] to SDK Content list (role user/model, parts)."""
     out: list[types.Content] = []
@@ -21,11 +46,11 @@ def _messages_to_sdk_history(messages: list[dict[str, Any]]) -> list[types.Conte
         role = m.get("role", "user")
         content = (m.get("content") or "").strip()
         if role == "system":
-            out.append(types.Content(role="user", parts=[types.Part.from_text(f"[System] {content}")]))
+            out.append(types.Content(role="user", parts=[_make_part(f"[System] {content}")]))
         elif role == "user":
-            out.append(types.Content(role="user", parts=[types.Part.from_text(content)]))
+            out.append(types.Content(role="user", parts=[_make_part(content)]))
         elif role == "assistant":
-            out.append(types.Content(role="model", parts=[types.Part.from_text(content)]))
+            out.append(types.Content(role="model", parts=[_make_part(content)]))
     return out
 
 def _response_text(response: Any) -> str:
@@ -66,19 +91,18 @@ class GeminiClient(BaseLLMClient):
         if not messages:
             return ""
         new_content = (messages[-1].get("content") or "").strip()
-        # Reuse session when this is a continuation (previous turns + one new user message)
+        message_part = _make_part(new_content)
         is_continuation = (
             self._chat_session is not None
             and len(messages) == 2 * self._session_turns + 1
         )
         if is_continuation:
             try:
-                response = self._chat_session.send_message(new_content)
+                response = self._chat_session.send_message(message_part)
             except Exception as e:
-                return f"[Gemini error: {e}]"
+                return _format_gemini_error(e)
             self._session_turns += 1
         else:
-            # New or reset: create ChatSession with history = all but last message, send last
             history = _messages_to_sdk_history(messages[:-1])
             try:
                 client = self._get_client()
@@ -86,9 +110,9 @@ class GeminiClient(BaseLLMClient):
                     model="gemini-2.5-flash",
                     history=history,
                 )
-                response = self._chat_session.send_message(new_content)
+                response = self._chat_session.send_message(message_part)
             except Exception as e:
-                return f"[Gemini error: {e}]"
+                return _format_gemini_error(e)
             self._session_turns = (len(messages) + 1) // 2
         return _response_text(response)
 
