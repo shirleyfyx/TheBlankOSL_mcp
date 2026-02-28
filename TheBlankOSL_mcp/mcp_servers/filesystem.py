@@ -17,6 +17,12 @@ mcp = FastMCP("filesystem")
 
 PathLike = Union[str, Path]
 
+
+def _resolve_path(path: PathLike) -> Path:
+    """Expand ~ and resolve to absolute path so '~/Desktop/...' works regardless of cwd."""
+    return Path(os.path.expanduser(path)).resolve()
+
+
 # ----------------------------
 # File and directory operations
 # ----------------------------
@@ -31,7 +37,7 @@ async def exists(path: PathLike) -> bool:
     Returns:
         True if the path exists, False otherwise.
     """
-    return Path(path).exists()
+    return _resolve_path(path).exists()
 
 
 @mcp.tool()
@@ -44,7 +50,7 @@ async def is_file(path: PathLike) -> bool:
     Returns:
         True if the path is a file, False otherwise.
     """
-    return Path(path).is_file()
+    return _resolve_path(path).is_file()
 
 
 @mcp.tool()
@@ -57,7 +63,7 @@ async def is_dir(path: PathLike) -> bool:
     Returns:
         True if the path is a directory, False otherwise.
     """
-    return Path(path).is_dir()
+    return _resolve_path(path).is_dir()
 
 @mcp.tool()
 async def read_file(path: PathLike, encoding: str = "utf-8") -> str:
@@ -70,7 +76,7 @@ async def read_file(path: PathLike, encoding: str = "utf-8") -> str:
     Returns:
         Contents of the file as a string.
     """
-    async with aiofiles.open(path, mode="r", encoding=encoding) as f:
+    async with aiofiles.open(_resolve_path(path), mode="r", encoding=encoding) as f:
         return await f.read()
 
 @mcp.tool()
@@ -82,7 +88,9 @@ async def write_file(path: PathLike, content: str, encoding: str = "utf-8") -> N
         content: Content to write.
         encoding: File encoding (default 'utf-8').
     """
-    async with aiofiles.open(path, mode="w", encoding=encoding) as f:
+    resolved = _resolve_path(path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    async with aiofiles.open(resolved, mode="w", encoding=encoding) as f:
         await f.write(content)
 
 @mcp.tool()
@@ -94,7 +102,7 @@ async def append_file(path: PathLike, content: str, encoding: str = "utf-8") -> 
         content: Content to append.
         encoding: File encoding (default 'utf-8').
     """
-    async with aiofiles.open(path, mode="a", encoding=encoding) as f:
+    async with aiofiles.open(_resolve_path(path), mode="a", encoding=encoding) as f:
         await f.write(content)
 
 
@@ -107,7 +115,7 @@ async def mkdir(path: PathLike, parents: bool = False, exist_ok: bool = False) -
         parents: Create parent directories if needed.
         exist_ok: Do not raise an error if the directory exists.
     """
-    Path(path).mkdir(parents=parents, exist_ok=exist_ok)
+    _resolve_path(path).mkdir(parents=parents, exist_ok=exist_ok)
 
 
 @mcp.tool()
@@ -120,7 +128,7 @@ async def listdir(path: PathLike) -> List[str]:
     Returns:
         List of file and directory names in the directory.
     """
-    return [p.name for p in Path(path).iterdir()]
+    return [p.name for p in _resolve_path(path).iterdir()]
 
 
 @mcp.tool()
@@ -130,7 +138,7 @@ async def remove(path: PathLike) -> None:
     Args:
         path: Path to remove.
     """
-    path = Path(path)
+    path = _resolve_path(path)
     if path.is_dir():
         # Use a blocking call in a thread so async loop isn't blocked
         await anyio.to_thread.run_sync(shutil.rmtree, path)
@@ -148,7 +156,7 @@ async def chmod(path: PathLike, mode: int) -> None:
         path: Path to modify.
         mode: POSIX-style permission (e.g., 0o644).
     """
-    await anyio.to_thread.run_sync(os.chmod, path, mode)
+    await anyio.to_thread.run_sync(os.chmod, _resolve_path(path), mode)
 
 
 @mcp.tool()
@@ -159,7 +167,7 @@ async def rename(src: PathLike, dst: PathLike) -> None:
         src: Source path.
         dst: Destination path.
     """
-    await anyio.to_thread.run_sync(Path(src).rename, dst)
+    await anyio.to_thread.run_sync(_resolve_path(src).rename, _resolve_path(dst))
 
 
 @mcp.tool()
@@ -170,8 +178,8 @@ async def copy(src: PathLike, dst: PathLike) -> None:
         src: Source path.
         dst: Destination path.
     """
-    src_path = Path(src)
-    dst_path = Path(dst)
+    src_path = _resolve_path(src)
+    dst_path = _resolve_path(dst)
     if src_path.is_dir():
         await anyio.to_thread.run_sync(shutil.copytree, src_path, dst_path)
     else:
@@ -186,7 +194,7 @@ async def move(src: PathLike, dst: PathLike) -> None:
         src: Source path.
         dst: Destination path.
     """
-    await anyio.to_thread.run_sync(shutil.move, src, dst)
+    await anyio.to_thread.run_sync(shutil.move, _resolve_path(src), _resolve_path(dst))
 
 
 @mcp.tool()
@@ -196,7 +204,7 @@ async def touch(path: PathLike) -> None:
     Args:
         path: Path to the file.
     """
-    await anyio.to_thread.run_sync(Path(path).touch)
+    await anyio.to_thread.run_sync(_resolve_path(path).touch)
 
 '''
 Supplementary tools to help guiding LLM identifying the OS information.
@@ -260,7 +268,7 @@ async def search_files(
     Returns:
         List of absolute file paths that match ALL criteria.
     """
-    root_path = Path(directory)
+    root_path = _resolve_path(directory)
     if not root_path.exists():
         raise FileNotFoundError(f"Directory not found: {directory}")
 

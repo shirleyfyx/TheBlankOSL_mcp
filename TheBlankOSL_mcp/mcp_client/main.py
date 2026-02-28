@@ -1,4 +1,5 @@
 import asyncio
+import re
 import typer
 import shlex
 import json
@@ -15,11 +16,47 @@ from .commands import config as config_cmd
 from .commands import tools as tools_cmd
 from .commands.call import main as call_main
 from .llm import get_client, list_backends, get_backend_name
+from .sampling import build_tools_context, run_sampling_turn
 
 # Import reusable logic from subcommands
 from .commands.tools import list_tools_logic, info_tool_logic
 from .commands.call import call_tool_logic
 from .commands.config import show_config_logic
+
+def _looks_like_placeholder_content(s: str) -> bool:
+    """True if write_file content is a placeholder instead of real data."""
+    if not s or not isinstance(s, str):
+        return True
+    lower = s.lower()
+    return (
+        "will be inserted" in lower
+        or "inserted here" in lower
+        or "after the forecast is retrieved" in lower
+        or "after ... is retrieved" in lower
+        or "details will be inserted" in lower
+        or "(weather details" in lower
+    )
+
+
+def _substitute_placeholder_results(text: str, results: List[str]) -> str:
+    """Replace any {{...}} placeholders in text with actual tool result content. Not hardcoded to step_1."""
+    if not results or "{{" not in text or "}}" not in text:
+        return text
+    # Extract content after "toolname: " for each result (the actual result body)
+    contents = [r.split(":", 1)[-1].strip() if ":" in r else r for r in results]
+
+    def repl(match: re.Match) -> str:
+        inner = match.group(1).strip()
+        # step_1 -> index 0, step_2 -> index 1, etc.
+        m = re.search(r"step_(\d+)", inner, re.IGNORECASE)
+        if m:
+            idx = int(m.group(1)) - 1
+            if 0 <= idx < len(contents):
+                return contents[idx]
+        return contents[0]
+
+    return re.sub(r"\{\{([^}]+)\}\}", repl, text)
+
 
 # --- Typer App Setup ---
 app = typer.Typer(
@@ -118,6 +155,20 @@ async def cmd_switch_llm(manager: McpManager, args: List[str]) -> None:
     settings_mgr.update_default_llm(backend_id)
     console.print(f"[green]Now using:[/green] {name}")
 
+async def cmd_roots(manager: McpManager, args: List[str]):
+    """Show current MCP roots (filesystem boundaries exposed to servers)."""
+    if not manager.roots:
+        console.print("[dim]No roots configured. Servers will get default workspace root.[/dim]")
+        return
+    table = Table(title="MCP Roots", show_header=True, header_style="bold cyan")
+    table.add_column("URI", style="cyan")
+    table.add_column("Name")
+    for r in manager.roots:
+        table.add_row(r.get("uri", ""), r.get("name", "") or "(no name)")
+    console.print(table)
+    console.print("[dim]Configure roots in your MCP config JSON under top-level 'roots': [{\"uri\": \"file:///path\", \"name\": \"...\"}][/dim]")
+
+
 async def cmd_help(manager: McpManager, args: List[str]):
     """Show available slash commands."""
     table = Table(show_header=False, box=None)
@@ -137,6 +188,7 @@ INTERACTIVE_COMMANDS: Dict[str, Callable[[McpManager, List[str]], Any]] = {
     "call": cmd_call,
     "config-show": cmd_config_show,
     "config-mcp-path": cmd_config_show,
+    "roots": cmd_roots,
     "list_llm": cmd_list_llm,
     "switch_llm": cmd_switch_llm,
     "help": cmd_help,
@@ -146,14 +198,15 @@ INTERACTIVE_COMMANDS: Dict[str, Callable[[McpManager, List[str]], Any]] = {
 
 async def interactive_session():
     manager = McpManager()
-    
     # Helper to always fetch the latest LLM from config
     def get_current_llm() -> str:
         saved = settings_mgr.load().default_llm
         return saved.strip() if saved and get_backend_name(saved.strip()) else "gemini"
 
+    # So servers can request LLM sampling via sampling/createMessage (same model as chat)
+    manager.set_llm_getter(lambda: get_client(get_current_llm()))
+
     console.print("[bold blue]Starting MCP Client Interactive Mode...[/bold blue]")
-    
     with console.status("[bold green]Booting MCP Servers...[/bold green]"):
         report = await manager.start_all()
 
@@ -178,6 +231,13 @@ async def interactive_session():
     console.print()
     console.print(f"[bold green]Currently using: {model_name}[/bold green]")
     console.print("Type '/help' for commands, '/exit' to quit.")
+
+    tools_context: str = ""
+    if report["success"]:
+        with console.status("[dim]Loading MCP tools for sampling...[/dim]"):
+            tools_context = await build_tools_context(manager)
+        if tools_context:
+            console.print("[dim]Sampling enabled: you can ask the LLM to run MCP tools (e.g. weather, list files).[/dim]")
 
     chat_history: List[dict] = []
     cached_client: Any = None
@@ -228,12 +288,162 @@ async def interactive_session():
                 except ValueError as e:
                     console.print(f"[red]{e}[/red]")
                     continue
-                
-                chat_history.append({"role": "user", "content": user_input.strip()})
-                with console.status("[dim]Thinking...[/dim]"):
-                    reply = await client.chat(chat_history)
-                chat_history.append({"role": "assistant", "content": reply})
-                console.print(reply)
+
+                user_message = user_input.strip()
+                if tools_context:
+                    # Sampling: LLM may return one or more tool calls; show request/response JSON with confirmation
+                    with console.status("[dim]Thinking...[/dim]"):
+                        reply_text, tool_calls = await run_sampling_turn(
+                            manager, client, chat_history, user_message, tools_context
+                        )
+                    chat_history.append({"role": "user", "content": user_message})
+                    chat_history.append({"role": "assistant", "content": reply_text or "(tool call)"})
+                    if reply_text:
+                        console.print(reply_text)
+                    if tool_calls:
+                        n = len(tool_calls)
+                        for i, tc in enumerate(tool_calls):
+                            request_json = json.dumps({"name": tc["name"], "arguments": tc["arguments"]}, indent=2)
+                            title = f"[bold cyan]MCP request {i+1}/{n}[/bold cyan]"
+                            console.print(Panel(
+                                request_json,
+                                title=title,
+                                border_style="cyan",
+                            ))
+                        while True:
+                            confirm = Prompt.ask(f"Send {n} tool(s) to MCP backend? [Y/n]", default="Y").strip().lower()
+                            if confirm in ("", "y", "yes"):
+                                do_send = True
+                                break
+                            if confirm in ("n", "no"):
+                                do_send = False
+                                break
+                            console.print("[yellow]Please enter Y (yes) or N (no).[/yellow]")
+                        if do_send:
+                            results_summary: List[str] = []
+                            raw_result_texts: List[str] = []  # full text from each tool for write_file substitution
+                            for i, tc in enumerate(tool_calls):
+                                name, arguments = tc["name"], dict(tc["arguments"]) if tc.get("arguments") else {}
+                                # If write_file content is a placeholder, use the previous tool result that has the actual content (longest = usually the fetched data)
+                                if name == "write_file" and raw_result_texts:
+                                    content = arguments.get("content") or ""
+                                    if _looks_like_placeholder_content(content):
+                                        arguments["content"] = max(raw_result_texts, key=len) or raw_result_texts[0]
+                                try:
+                                    result = await manager.call_tool(name, arguments)
+                                    summary = ""
+                                    full_text = ""
+                                    if isinstance(result, dict):
+                                        sc = result.get("structuredContent")
+                                        if isinstance(sc, dict) and "result" in sc:
+                                            full_text = str(sc["result"])
+                                            summary = full_text[:800]
+                                        elif isinstance(result.get("content"), list) and result["content"]:
+                                            first = result["content"][0]
+                                            if isinstance(first, dict) and "text" in first:
+                                                full_text = str(first["text"])
+                                                summary = full_text[:800]
+                                    if not summary:
+                                        full_text = str(result)
+                                        summary = full_text[:800]
+                                    results_summary.append(f"{name}: {summary}")
+                                    raw_result_texts.append(full_text)
+                                except Exception as e:
+                                    results_summary.append(f"{name}: error - {e}")
+                                    raw_result_texts.append("")
+
+                            if results_summary:
+                                summary_ctx = "\n\n".join(results_summary)
+                                hist = list(chat_history) + [
+                                    {"role": "user", "content": user_message},
+                                    {"role": "assistant", "content": "(I ran the requested tools.)"},
+                                    {"role": "user", "content": f"The user asked: {user_message}\n\nTool results:\n{summary_ctx}\n\nReply in 1–3 short sentences summarizing what was done and the main result for the user. Use the actual tool result text in your reply; do not use any placeholder syntax (e.g. {{...}}). No tool calls."},
+                                ]
+                                with console.status("[dim]Summarizing...[/dim]"):
+                                    llm_summary = await client.chat(hist)
+                                summary_text = (llm_summary or "").strip() or "Done."
+                                summary_text = _substitute_placeholder_results(summary_text, results_summary)
+                                console.print(summary_text)
+                                # Keep assistant reply as the summary (replace the placeholder we added earlier)
+                                if chat_history and chat_history[-1].get("role") == "assistant":
+                                    chat_history[-1] = {"role": "assistant", "content": summary_text}
+                                else:
+                                    chat_history.append({"role": "assistant", "content": summary_text})
+
+                            # Chain: one follow-up turn so LLM can suggest more tools using the results (e.g. send_email with weather)
+                            if results_summary and n <= 3:
+                                chain_msg = (
+                                    f"Tool results from previous step:\n" + "\n".join(results_summary)
+                                    + f"\n\nOriginal request: {user_message}\n\n"
+                                    "If the user's request needs more tool calls (e.g. send_email, or write_file to save content), output one or more TOOL_CALL blocks now. "
+                                    "For write_file to Desktop or Downloads always use path \"~/Desktop/filename\" or \"~/Downloads/filename\" (never /root/Desktop). "
+                                    "Otherwise do not output any TOOL_CALL."
+                                )
+                                with console.status("[dim]Checking for follow-up actions...[/dim]"):
+                                    chain_reply, chain_calls = await run_sampling_turn(
+                                        manager, client, chat_history, chain_msg, tools_context
+                                    )
+                                if chain_calls:
+                                    chat_history.append({"role": "user", "content": chain_msg})
+                                    chat_history.append({"role": "assistant", "content": chain_reply or "(tool call)"})
+                                    nc = len(chain_calls)
+                                    for i, tc in enumerate(chain_calls):
+                                        req_json = json.dumps({"name": tc["name"], "arguments": tc["arguments"]}, indent=2)
+                                        console.print(Panel(
+                                            req_json,
+                                            title=f"[bold cyan]MCP request (follow-up) {i+1}/{nc}[/bold cyan]",
+                                            border_style="cyan",
+                                        ))
+                                    while True:
+                                        confirm = Prompt.ask(f"Send {nc} follow-up tool(s)? [Y/n]", default="Y").strip().lower()
+                                        if confirm in ("", "y", "yes"):
+                                            do_chain = True
+                                            break
+                                        if confirm in ("n", "no"):
+                                            do_chain = False
+                                            break
+                                        console.print("[yellow]Please enter Y (yes) or N (no).[/yellow]")
+                                    if do_chain:
+                                        chain_results = []
+                                        for i, tc in enumerate(chain_calls):
+                                            name, arguments = tc["name"], tc["arguments"]
+                                            try:
+                                                result = await manager.call_tool(name, arguments)
+                                                summary = ""
+                                                if isinstance(result, dict):
+                                                    sc = result.get("structuredContent")
+                                                    if isinstance(sc, dict) and "result" in sc:
+                                                        summary = str(sc["result"])[:800]
+                                                    elif isinstance(result.get("content"), list) and result["content"]:
+                                                        first = result["content"][0]
+                                                        if isinstance(first, dict) and "text" in first:
+                                                            summary = str(first["text"])[:800]
+                                                chain_results.append(f"{name}: {summary or str(result)[:800]}")
+                                            except Exception as e:
+                                                chain_results.append(f"{name}: error - {e}")
+                                        if chain_results:
+                                            chain_ctx = "\n\n".join(chain_results)
+                                            hist2 = list(chat_history) + [
+                                                {"role": "user", "content": chain_msg},
+                                                {"role": "assistant", "content": "(Ran follow-up tools.)"},
+                                                {"role": "user", "content": f"Follow-up tool results:\n{chain_ctx}\n\nReply in 1–2 sentences for the user. Use the actual tool result text; do not use any placeholder syntax (e.g. {{...}}). No tool calls."},
+                                            ]
+                                            with console.status("[dim]Summarizing...[/dim]"):
+                                                chain_summary = await client.chat(hist2)
+                                            if chain_summary and chain_summary.strip():
+                                                cs = _substitute_placeholder_results(chain_summary.strip(), chain_results)
+                                                console.print(cs)
+                                                if chat_history and chat_history[-1].get("role") == "assistant":
+                                                    chat_history[-1] = {"role": "assistant", "content": cs}
+                        else:
+                            console.print("[dim]Skipped.[/dim]")
+                else:
+                    # No tools: plain LLM reply only
+                    chat_history.append({"role": "user", "content": user_message})
+                    with console.status("[dim]Thinking...[/dim]"):
+                        reply = await client.chat(chat_history)
+                    chat_history.append({"role": "assistant", "content": reply})
+                    console.print(reply)
 
         except KeyboardInterrupt:
             break
