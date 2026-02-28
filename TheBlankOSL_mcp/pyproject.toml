@@ -28,6 +28,8 @@ dependencies = [
     "typer[all]==0.21.1",
     "pyyaml==6.0.3",
     "rich==14.3.1",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
     # Transitive dependencies (pinned for reproducibility)
     "annotated-types==0.7.0",
     "attrs==25.4.0",
