@@ -20,6 +20,8 @@ class McpServerConfig:
 @dataclass
 class McpConfig:
     servers: Dict[str, McpServerConfig] = field(default_factory=dict)
+    # Optional roots: list of {"uri": "file:///path", "name": "Display Name"}
+    roots: List[Dict[str, str]] = field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "McpConfig":
@@ -36,7 +38,13 @@ class McpConfig:
 
         # Expect top-level key "mcpServers"
         servers_data = data.get("mcpServers", {})
+        roots_data = data.get("roots", [])
         config = cls()
+
+        if isinstance(roots_data, list):
+            for r in roots_data:
+                if isinstance(r, dict) and r.get("uri"):
+                    config.roots.append({"uri": str(r["uri"]), "name": str(r.get("name", ""))})
 
         for name, s_data in servers_data.items():
             # Validate required fields
@@ -68,7 +76,8 @@ class McpConfig:
                     "enabled": s.enabled
                 }
                 for name, s in self.servers.items()
-            }
+            },
+            "roots": self.roots,
         }
         with open(path, 'w', encoding="utf-8") as f:
             json.dump(output, f, indent=4)

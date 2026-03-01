@@ -1,8 +1,12 @@
 import asyncio
 import os
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
 from .mcp_transport import McpTransport
 from .mcp_config_parser import McpServerConfig
+
+if TYPE_CHECKING:
+    from .mcp_manager import McpManager
+
 
 class McpServer:
     """
@@ -18,9 +22,10 @@ class McpServer:
         self._stderr_buffer: List[str] = []
         self.capabilities: Dict[str, Any] = {}
 
-    async def start(self):
+    async def start(self, manager: Optional["McpManager"] = None):
         """
         Starts the process, attaches transport, and performs handshake.
+        If manager is provided, registers handler for server requests (roots/list, elicitation/create).
         """
         if not self.config.enabled:
             return
@@ -53,6 +58,8 @@ class McpServer:
         # 3. Attach Transport & Start Listener
         transport = McpTransport(process.stdout, process.stdin)
         self.transport = transport
+        if manager:
+            transport.set_request_handler(manager.get_request_handler(self.name))
         self._listener_task = asyncio.create_task(transport.start_listening())
 
         # 4. Initialize (Handshake)
@@ -74,12 +81,13 @@ class McpServer:
         if not transport:
             raise RuntimeError("Transport not connected")
 
-        # A. Send capabilities
+        # A. Send capabilities (roots, elicitation, sampling per MCP client-concepts)
         response = await transport.send_request("initialize", {
             "protocolVersion": "2024-11-05",
             "capabilities": {
                 "roots": {"listChanged": True},
-                "sampling": {}
+                "elicitation": {"form": {}, "url": {}},
+                "sampling": {"tools": {}}
             },
             "clientInfo": {"name": "blankosl_cli", "version": "0.1.0"}
         })

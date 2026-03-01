@@ -1,6 +1,7 @@
 import zipfile
 import tarfile
 import anyio
+import os
 from typing import List, Union, Literal
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
@@ -11,6 +12,10 @@ mcp = FastMCP("archive-manager")
 
 PathLike = Union[str, Path]
 TarCompression = Literal["gzip", "bz2", "xz", "none"]
+
+def _resolve_path(path: PathLike) -> Path:
+    """Expand ~ and resolve to an absolute path."""
+    return Path(os.path.expanduser(str(path))).resolve()
 
 
 # ---------------------------------------------------------------------
@@ -26,14 +31,15 @@ async def compress_zip(sources: List[PathLike], output_path: PathLike) -> str:
         sources: List of file or directory paths to include.
         output_path: Destination path for the archive.
     """
-    out_path = Path(output_path)
+    out_path = _resolve_path(output_path)
     # Ensure correct extension if user forgot it
     if not out_path.name.lower().endswith(".zip"):
         out_path = out_path.with_suffix(".zip")
     
-    source_paths = [Path(p).resolve() for p in sources]
+    source_paths = [_resolve_path(p) for p in sources]
 
     def _op():
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(out_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             for src in source_paths:
                 if not src.exists():
@@ -59,8 +65,8 @@ async def decompress_zip(archive_path: PathLike, extract_to: PathLike) -> str:
         archive_path: Path to the .zip file.
         extract_to: Destination directory.
     """
-    arc_path = Path(archive_path).resolve()
-    dest_path = Path(extract_to).resolve()
+    arc_path = _resolve_path(archive_path)
+    dest_path = _resolve_path(extract_to)
 
     def _op():
         if not arc_path.exists():
@@ -87,13 +93,14 @@ async def compress_7z(sources: List[PathLike], output_path: PathLike) -> str:
         sources: List of file or directory paths.
         output_path: Destination path.
     """
-    out_path = Path(output_path)
+    out_path = _resolve_path(output_path)
     if not out_path.name.lower().endswith(".7z"):
         out_path = out_path.with_suffix(".7z")
 
-    source_paths = [Path(p).resolve() for p in sources]
+    source_paths = [_resolve_path(p) for p in sources]
 
     def _op():
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         with py7zr.SevenZipFile(out_path, 'w') as zf:
             for src in source_paths:
                 if not src.exists():
@@ -117,8 +124,8 @@ async def decompress_7z(archive_path: PathLike, extract_to: PathLike) -> str:
         archive_path: Path to the .7z file.
         extract_to: Destination directory.
     """
-    arc_path = Path(archive_path).resolve()
-    dest_path = Path(extract_to).resolve()
+    arc_path = _resolve_path(archive_path)
+    dest_path = _resolve_path(extract_to)
 
     def _op():
         if not arc_path.exists():
@@ -151,8 +158,8 @@ async def compress_tar(
         compression: Algorithm to use ('gzip', 'bz2', 'xz', or 'none').
                      Default is 'gzip'.
     """
-    out_path = Path(output_path)
-    source_paths = [Path(p).resolve() for p in sources]
+    out_path = _resolve_path(output_path)
+    source_paths = [_resolve_path(p) for p in sources]
 
     # Map inputs to tarfile modes and extensions
     mode_map = {
@@ -171,6 +178,7 @@ async def compress_tar(
              out_path = Path(str(out_path) + default_ext)
 
     def _op():
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         with tarfile.open(out_path, write_mode) as tf:
             for src in source_paths:
                 if not src.exists():
@@ -196,8 +204,8 @@ async def decompress_tar(archive_path: PathLike, extract_to: PathLike) -> str:
         archive_path: Path to the tar archive.
         extract_to: Destination directory.
     """
-    arc_path = Path(archive_path).resolve()
-    dest_path = Path(extract_to).resolve()
+    arc_path = _resolve_path(archive_path)
+    dest_path = _resolve_path(extract_to)
 
     def _op():
         if not arc_path.exists():
