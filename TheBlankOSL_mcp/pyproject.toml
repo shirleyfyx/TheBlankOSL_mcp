@@ -81,6 +81,7 @@ dependencies = [
     "uritemplate==4.2.0",
     "urllib3==2.5.0",
     "uvicorn==0.38.0",
+    "ollama",
 ]
 
 [project.scripts]

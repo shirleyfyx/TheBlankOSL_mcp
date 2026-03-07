@@ -3,9 +3,11 @@ from typing import Any
 from ..utils import settings_mgr
 from .base import BaseLLMClient
 from .gemini import GeminiClient
+from .qwen import QwenClient
 
 _BACKENDS: dict[str, tuple[str, type[BaseLLMClient]]] = {
     "gemini": ("Google Gemini", GeminiClient),
+    "qwen": ("Uwaterloo Qwen", QwenClient)
 }
 
 def list_backends() -> list[dict[str, str]]:
