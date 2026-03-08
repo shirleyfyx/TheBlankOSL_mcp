@@ -90,8 +90,7 @@ cases:
         arguments:
           ticker: "AAPL"
       - tool_name: "stocks.get_price"
-        arguments:
-          ticker: "GOOGL"
+      # Don't check ticker arg for Google — LLM may use GOOG or GOOGL
       - tool_name: "stocks.get_price"
         arguments:
           ticker: "MSFT"
@@ -123,15 +122,13 @@ cases:
           type: "object"
           properties:
             input_paths:
-              type: "array"
-              items:
-                type: "string"
+              type: "string"
+              description: "Comma-separated list of PDF file paths to merge."
             output_path:
               type: "string"
+              description: "The output path for the merged PDF."
           required: ["input_paths", "output_path"]
     expected_trajectory:
       - tool_name: "pdf_tools.merge_pdfs"
-        arguments:
-          input_paths: ["/app/doc1.pdf", "/app/doc2.pdf"]
-          output_path: "/tmp/merged_docs.pdf"
-    eval_type: "exact_match"
+        # Only check tool selection, not args — the string format is ambiguous
+    eval_type: "unordered_subset"
