@@ -8,6 +8,9 @@ from rich.prompt import Prompt
 from rich.panel import Panel
 from rich.table import Table
 
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import InMemoryHistory
+
 # Import your modules
 from . import __version__
 from .utils import console, load_mcp_config, settings_mgr
@@ -242,6 +245,7 @@ async def interactive_session():
     chat_history: List[dict] = []
     cached_client: Any = None
     cached_cid: str = ""
+    pt_session = PromptSession(history=InMemoryHistory())
 
     while True:
         try:
@@ -250,7 +254,12 @@ async def interactive_session():
             display_name = get_backend_name(current_cid) or current_cid
             
             prompt_label = f"BLANKOSL ({display_name})"
-            user_input = Prompt.ask(f"\n[bold blue]{prompt_label}[/bold blue]")
+            # Styled prompt (bold blue) + UP/DOWN history via prompt_toolkit
+            formatted_prompt = [("bold fg:ansiblue", f"\n{prompt_label} ")]
+            try:
+                user_input = await asyncio.to_thread(pt_session.prompt, formatted_prompt)
+            except EOFError:
+                break
             
             if not user_input.strip():
                 continue

@@ -27,6 +27,7 @@ dependencies = [
     "requests==2.32.5",
     "typer[all]==0.21.1",
     "pyyaml==6.0.3",
+    "prompt_toolkit>=3.0.0",
     "rich==14.3.1",
     # Transitive dependencies (pinned for reproducibility)
     "annotated-types==0.7.0",
