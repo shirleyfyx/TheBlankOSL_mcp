@@ -175,6 +175,8 @@ async def cmd_help(manager: McpManager, args: List[str]):
     table.add_column("Command", style="bold cyan")
     table.add_column("Description", style="dim")
 
+    table.add_row("/add-server", "Dynamically start a new MCP server. Usage: /add-server <name> <cmd> [args...]")
+
     for name, func in INTERACTIVE_COMMANDS.items():
         doc = func.__doc__.split('\n')[0] if func.__doc__ else "No description"
         table.add_row(f"/{name}", doc)
@@ -266,6 +268,32 @@ async def interactive_session():
 
                 if cmd_name in ("exit", "quit", "q"):
                     break
+
+                if cmd_name == "add-server":
+                    if len(cmd_args) < 2:
+                        console.print("[red]Usage:[/red] /add-server <name> <command> [args...]")
+                        continue
+
+                    server_name = cmd_args[0]
+                    server_cmd = cmd_args[1]
+                    server_args = cmd_args[2:]
+
+                    from .mcp_config_parser import McpServerConfig
+                    s_cfg = McpServerConfig(command=server_cmd, args=server_args, enabled=True)
+                    s_cfg.expand_vars()
+
+                    try:
+                        with console.status(f"[bold green]Starting server '{server_name}'...[/bold green]"):
+                            await manager.start_server(server_name, s_cfg)
+                        console.print(f"[green]✓ Server '{server_name}' connected successfully![/green]")
+
+                        # Rebuild tools context so the LLM knows about the new tools
+                        with console.status("[dim]Reloading LLM tool context...[/dim]"):
+                            tools_context = await build_tools_context(manager)
+                    except Exception as e:
+                        console.print(f"[red]Failed to start server '{server_name}':[/red] {e}")
+
+                    continue
 
                 # The awkward if-branch is gone! Everything routes dynamically.
                 if cmd_name in INTERACTIVE_COMMANDS:

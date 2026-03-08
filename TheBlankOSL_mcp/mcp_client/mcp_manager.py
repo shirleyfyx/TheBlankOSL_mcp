@@ -4,6 +4,8 @@ import os
 import uuid
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Callable, Awaitable
+
+from .mcp_config_parser import McpServerConfig
 from .utils import load_mcp_config, console
 from .mcp_server import McpServer
 
@@ -412,6 +414,19 @@ class McpManager:
             return {"action": "accept", "content": content}
         except Exception as e:
             return {"action": "decline", "reason": str(e)}
+
+    async def start_server(self, name: str, s_cfg: McpServerConfig) -> None:
+        """Dynamically start a single server and add it to active sessions."""
+        if name in self.sessions:
+            raise ValueError(f"Server '{name}' is already running.")
+
+        server = McpServer(name, s_cfg)
+
+        # Start the server with a timeout to prevent hanging the CLI
+        await asyncio.wait_for(server.start(self), timeout=10.0)
+
+        # If successful, add to active sessions
+        self.sessions[name] = server
 
     async def shutdown(self):
         """Gracefully stops all servers."""
