@@ -82,6 +82,9 @@ def main(
     gemini_api_key: Optional[str] = typer.Option(
         None, "--gemini-api-key", help="Set the Gemini API key in CLI config and exit."
     ),
+    groq_api_key: Optional[str] = typer.Option(
+        None, "--groq-api-key", help="Set the Groq API key in CLI config and exit."
+    ),
     show_settings: bool = typer.Option(
         False, "--show", help="Display all CLI global settings and exit."
     ),
@@ -103,6 +106,12 @@ def main(
     if gemini_api_key is not None:
         settings_mgr.update_gemini_api_key(gemini_api_key)
         console.print("[green]Gemini API key saved to CLI config.[/green]")
+        raise typer.Exit()
+
+    # 2b. Action: Set Groq API key
+    if groq_api_key is not None:
+        settings_mgr.update_groq_api_key(groq_api_key)
+        console.print("[green]Groq API key saved to CLI config.[/green]")
         raise typer.Exit()
 
     # 3. Action: Show settings (or default behavior if no args provided)

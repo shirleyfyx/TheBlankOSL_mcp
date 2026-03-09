@@ -16,6 +16,7 @@ class CliSettings:
     mcp_config_path: Optional[str] = None
     default_llm: str = "Google Gemini"
     gemini_api_key: str = ""
+    groq_api_key: str = ""
     auto_confirm: bool = False
 
 class SettingsManager:
@@ -89,4 +90,10 @@ class SettingsManager:
         """Set the Gemini API key and persist (CLI config only)."""
         settings = self.load()
         settings.gemini_api_key = (api_key or "").strip()
+        self.save(settings)
+
+    def update_groq_api_key(self, api_key: str) -> None:
+        """Set the Groq API key and persist (CLI config only)."""
+        settings = self.load()
+        settings.groq_api_key = (api_key or "").strip()
         self.save(settings)
