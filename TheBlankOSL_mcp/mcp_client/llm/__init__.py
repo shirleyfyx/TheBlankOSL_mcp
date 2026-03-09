@@ -3,10 +3,12 @@ from typing import Any
 from ..utils import settings_mgr
 from .base import BaseLLMClient
 from .gemini import GeminiClient
+from .groq import GroqClient
 from .qwen import QwenClient
 
 _BACKENDS: dict[str, tuple[str, type[BaseLLMClient]]] = {
     "gemini": ("Google Gemini", GeminiClient),
+    "groq": ("Groq", GroqClient),
     "qwen": ("Uwaterloo Qwen", QwenClient)
 }
 
@@ -18,6 +20,8 @@ def get_llm_kwargs(backend_id: str) -> dict[str, Any]:
     settings = settings_mgr.load()
     if backend_id == "gemini":
         return {"api_key": settings.gemini_api_key}
+    if backend_id == "groq":
+        return {"api_key": settings.groq_api_key}
     # e.g. if backend_id == "openai": return {"api_key": settings.openai_api_key}
     return {}
 

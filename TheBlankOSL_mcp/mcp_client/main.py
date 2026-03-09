@@ -407,8 +407,9 @@ async def interactive_session():
                                 else:
                                     chat_history.append({"role": "assistant", "content": summary_text})
 
-                            # Chain: one follow-up turn so LLM can suggest more tools using the results (e.g. send_email with weather)
-                            if results_summary and n <= 3:
+                            # Chain: one follow-up turn so LLM can suggest more tools using the results (e.g. send_email with weather).
+                            # Skip when we ran only one tool to avoid an extra LLM call for simple requests (no hardcoded tool list).
+                            if results_summary and n > 1 and n <= 3:
                                 chain_msg = (
                                     f"Tool results from previous step:\n" + "\n".join(results_summary)
                                     + f"\n\nOriginal request: {user_message}\n\n"
@@ -420,6 +421,15 @@ async def interactive_session():
                                     chain_reply, chain_calls = await run_sampling_turn(
                                         manager, client, chat_history, chain_msg, tools_context
                                     )
+                                # Drop follow-up tool calls that duplicate what we just ran (LLMs sometimes repeat the same call)
+                                _executed_sigs = {
+                                    (tc["name"], json.dumps(tc.get("arguments") or {}, sort_keys=True))
+                                    for tc in tool_calls
+                                }
+                                chain_calls = [
+                                    tc for tc in chain_calls
+                                    if (tc["name"], json.dumps(tc.get("arguments") or {}, sort_keys=True)) not in _executed_sigs
+                                ]
                                 if chain_calls:
                                     chat_history.append({"role": "user", "content": chain_msg})
                                     chat_history.append({"role": "assistant", "content": chain_reply or "(tool call)"})

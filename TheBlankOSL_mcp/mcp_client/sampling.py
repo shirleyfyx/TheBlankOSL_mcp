@@ -71,42 +71,68 @@ async def build_tools_context(manager: McpManager) -> str:
     return "\n".join(lines)
 
 
+def _parse_single_tool_call_json(raw: str) -> Dict[str, Any] | None:
+    """If raw is a single tool-call object {"name": str, "arguments": dict}, return it; else None."""
+    raw = raw.strip()
+    # Allow optional markdown code fence
+    if raw.startswith("```"):
+        lines = raw.split("\n")
+        if lines[0].startswith("```"):
+            raw = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+    try:
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            return None
+        name = data.get("name")
+        arguments = data.get("arguments")
+        if not name or not isinstance(name, str):
+            return None
+        if arguments is None:
+            arguments = {}
+        if not isinstance(arguments, dict):
+            return None
+        return {"name": name, "arguments": arguments}
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
 def parse_tool_calls_from_response(response: str) -> List[Dict[str, Any]]:
-    """Parse all TOOL_CALL...END_TOOL_CALL blocks; return list of {"name": str, "arguments": dict}."""
-    if not response or TOOL_CALL_START not in response or TOOL_CALL_END not in response:
+    """Parse all TOOL_CALL...END_TOOL_CALL blocks; return list of {"name": str, "arguments": dict}.
+    Also accepts a single bare JSON object (no delimiters) for LLMs that omit the block format."""
+    if not response:
         return []
-    pattern = re.compile(
-        re.escape(TOOL_CALL_START) + r"\s*\n?\s*([\s\S]*?)\s*\n?\s*" + re.escape(TOOL_CALL_END),
-        re.DOTALL,
-    )
     out: List[Dict[str, Any]] = []
-    for match in pattern.finditer(response):
-        try:
-            raw = match.group(1).strip()
-            data = json.loads(raw)
-            name = data.get("name")
-            arguments = data.get("arguments")
-            if not name or not isinstance(name, str):
-                continue
-            if arguments is None:
-                arguments = {}
-            if not isinstance(arguments, dict):
-                continue
-            out.append({"name": name, "arguments": arguments})
-        except (json.JSONDecodeError, AttributeError):
-            continue
+    if TOOL_CALL_START in response and TOOL_CALL_END in response:
+        pattern = re.compile(
+            re.escape(TOOL_CALL_START) + r"\s*\n?\s*([\s\S]*?)\s*\n?\s*" + re.escape(TOOL_CALL_END),
+            re.DOTALL,
+        )
+        for match in pattern.finditer(response):
+            tc = _parse_single_tool_call_json(match.group(1))
+            if tc:
+                out.append(tc)
+    if not out:
+        tc = _parse_single_tool_call_json(response)
+        if tc:
+            out.append(tc)
     return out
 
 
 def strip_tool_call_blocks(response: str) -> str:
-    """Remove all TOOL_CALL blocks from the response for display."""
-    if TOOL_CALL_START not in response or TOOL_CALL_END not in response:
-        return response.strip()
-    pattern = re.compile(
-        r"\s*" + re.escape(TOOL_CALL_START) + r".*?" + re.escape(TOOL_CALL_END) + r"\s*",
-        re.DOTALL,
-    )
-    return pattern.sub("", response).strip()
+    """Remove all TOOL_CALL blocks from the response for display.
+    Also strips a single bare JSON tool-call object (no delimiters) so it is not shown to the user."""
+    if not response:
+        return ""
+    if TOOL_CALL_START in response and TOOL_CALL_END in response:
+        pattern = re.compile(
+            r"\s*" + re.escape(TOOL_CALL_START) + r".*?" + re.escape(TOOL_CALL_END) + r"\s*",
+            re.DOTALL,
+        )
+        out = pattern.sub("", response).strip()
+        return out
+    if _parse_single_tool_call_json(response) is not None:
+        return ""
+    return response.strip()
 
 
 async def run_sampling_turn(
