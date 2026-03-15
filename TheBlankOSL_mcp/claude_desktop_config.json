@@ -12,12 +12,6 @@
                 "/app/TheBlankOSL_mcp/mcp_servers/filesystem.py"
             ]
         },
-        "youtube": {
-            "command": "python",
-            "args": [
-                "/app/TheBlankOSL_mcp/mcp_servers/youtube.py"
-            ]
-        },
         "process_manager": {
             "command": "python",
             "args": [
@@ -58,6 +52,12 @@
             "command": "python",
             "args": [
                 "/app/TheBlankOSL_mcp/mcp_servers/contacts_manager.py"
+            ]
+        },
+        "csv_manager": {
+            "command": "python",
+            "args": [
+                "/app/TheBlankOSL_mcp/mcp_servers/csv_manager.py"
             ]
         }
     },
