@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Blank OSL — Symposium Poster 48×36</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+  width: 100%; height: 100%;
+  background: #0a0a0a;
+  display: flex; align-items: flex-start; justify-content: center;
+}
+.poster {
+  width: 1440px; height: 1080px; background: #05080F;
+  position: relative; overflow: hidden;
+  font-family: 'DM Sans', sans-serif;
+  display: flex; flex-direction: column;
+}
+@media(max-width: 1460px) {
+  .poster { transform: scale(calc(100vw / 1440)); transform-origin: top left; }
+  body { height: calc(1080px * (100vw / 1440)); }
+}
+:root {
+  --bg: #05080F; --bg2: #07091A; --bg3: #0B0F1E;
+  --card: #090D1C; --card2: #0C1020;
+  --b1: #111A2E; --b2: #1A263D; --b3: #1E2C42;
+  --green: #00E06A; --gd: #00E06A18; --gb: #00E06A38;
+  --cyan: #00BEF0; --cd: #00BEF012; --cb: #00BEF030;
+  --amber: #F0A020; --ad: #F0A02012; --ab: #F0A02028;
+  --purple: #9B72FF; --pd: #9B72FF12; --pb: #9B72FF30;
+  --gold: #FFCD00; --goldd: #FFCD0015; --goldb: #FFCD0035;
+  --red: #FF4A65;
+  --text: #D0D8EA; --t2: #7A8DA8; --t3: #2A3B56;
+  --mono: 'JetBrains Mono', monospace; --disp: 'Bebas Neue', sans-serif; --sans: 'DM Sans', sans-serif;
+}
+.poster::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-image: linear-gradient(var(--b1) 1px, transparent 1px), linear-gradient(90deg, var(--b1) 1px, transparent 1px);
+  background-size: 40px 40px; opacity: 0.6;
+}
+.poster::after {
+  content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 1000px; height: 350px; border-radius: 50%;
+  background: radial-gradient(ellipse, #00E06A08 0%, transparent 70%);
+  pointer-events: none; z-index: 0;
+}
+.scan {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,.03) 3px, rgba(0,0,0,.03) 4px);
+}
+.poster > *:not(.scan) { position: relative; z-index: 2; }
+
+/* ── HEADER ── */
+.hdr {
+  height: 94px; flex-shrink: 0;
+  display: flex; align-items: center;
+  padding: 0 40px; gap: 20px;
+  border-bottom: 2px solid var(--b2);
+  background: linear-gradient(180deg, #060912 0%, #05080F 100%);
+}
+.uw-block {
+  flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+  gap: 4px; padding-right: 20px; border-right: 1px solid var(--b2);
+}
+.uw-name { font-family: var(--disp); font-size: 13px; color: var(--gold); letter-spacing: 0.1em; text-align: center; line-height: 1.2; }
+.hdr-logo-box {
+  flex-shrink: 0; width: 56px; height: 56px; border: 1.5px solid var(--gb);
+  border-radius: 12px; background: var(--gd); display: flex; align-items: center; justify-content: center;
+}
+.hdr-title {
+  flex-shrink: 0; font-family: var(--disp); font-size: 56px; line-height: 0.9;
+  color: #fff; letter-spacing: 0.04em; text-shadow: 0 0 40px #00E06A33;
+}
+.hdr-div { flex-shrink: 0; width: 1.5px; height: 60px; background: var(--b2); }
+
+.hdr-team {
+  flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px;
+  min-width: 280px; padding-left: 10px;
+}
+.hdr-team-lbl { font-family: var(--mono); font-size: 10px; color: var(--green); letter-spacing: 0.12em; text-transform: uppercase; }
+.hdr-team-names { font-size: 12.5px; font-weight: 500; color: var(--text); }
+.hdr-mentor-lbl { font-family: var(--mono); font-size: 10px; color: var(--amber); letter-spacing: 0.12em; text-transform: uppercase; margin-top: 2px; }
+.hdr-mentor-names { font-size: 11px; color: var(--t2); }
+
+.hdr-right { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.hdr-r2 { font-family: var(--mono); font-size: 10px; color: var(--t2); font-weight: 500; }
+
+/* ── BODY (2 cols: Left + Huge Right) ── */
+.body {
+  flex: 1; display: grid;
+  grid-template-columns: 1fr 2.85fr;
+  gap: 24px; padding: 24px 36px;
+  min-height: 0;
+}
+
+.left-col { display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
+.right-area { display: flex; flex-direction: column; gap: 20px; overflow: hidden; min-width: 0; }
+.right-bottom { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; flex: 1; min-height: 0; }
+
+/* ── GLOBAL POSTER UI ELEMENTS ── */
+.section-header {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 4px; flex-shrink: 0;
+}
+.sh-num {
+  font-family: var(--mono); font-size: 13px; color: var(--bg);
+  background: var(--green); padding: 3px 8px; border-radius: 4px;
+  font-weight: 700; letter-spacing: 0.05em;
+}
+.sh-title {
+  font-family: var(--disp); font-size: 26px; color: #FFF;
+  letter-spacing: 0.06em; flex-shrink: 0;
+}
+.sh-ln { flex: 1; height: 2px; background: linear-gradient(90deg, var(--b2), transparent); }
+
+.card {
+  background: var(--card); border: 1px solid var(--b2);
+  border-radius: 10px; padding: 14px;
+}
+
+/* ── LEFT COLUMN ── */
+.abstract-card p {
+  font-size: 13px; color: var(--t2); line-height: 1.55; margin-bottom: 10px;
+}
+.abstract-card p:last-child { margin-bottom: 0; }
+.abstract-card em { color: var(--text); font-style: normal; font-weight: 500; }
+.abstract-card strong { color: var(--green); font-weight: 600; }
+
+.steps { display: flex; flex-direction: column; gap: 0; flex: 1; }
+.step { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px dashed var(--b2); }
+.step:last-child { border-bottom: none; padding-bottom: 0; }
+.step:first-child { padding-top: 0; }
+.sl { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; align-self: stretch; }
+.sn {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--gd); border: 1px solid var(--gb);
+  font-family: var(--disp); font-size: 14px; color: var(--green); display: flex; align-items: center; justify-content: center;
+}
+.sline { width: 1.5px; flex: 1; background: var(--b1); margin-top: 6px; min-height: 8px; }
+.sname { font-size: 13px; font-weight: 600; color: #FFF; margin-bottom: 2px; }
+.sdesc { font-size: 11.5px; color: var(--t2); line-height: 1.4; }
+.scmd {
+  font-family: var(--mono); font-size: 8.5px; color: var(--green); background: var(--gd);
+  border: 1px solid var(--gb); padding: 2px 5px; border-radius: 4px; display: inline-block; margin-top: 4px;
+}
+
+/* ── RIGHT AREA: ARCHITECTURE ── */
+.arch-wrap { 
+  padding: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; 
+  background: var(--bg2); border: 1px solid var(--b2); border-radius: 10px; flex-shrink: 0;
+}
+
+/* ── RIGHT AREA: TERMINAL ── */
+.term {
+  flex: 1; background: var(--bg3); border: 1px solid var(--b2); border-radius: 10px;
+  overflow: hidden; display: flex; flex-direction: column; min-height: 0; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+.tbar { display: flex; align-items: center; gap: 6px; padding: 10px 16px; background: var(--b1); border-bottom: 1px solid var(--b2); flex-shrink: 0; }
+.td { width: 10px; height: 10px; border-radius: 50%; }
+.td.r { background: #FF5F57; } .td.y { background: #FEBC2E; } .td.g { background: var(--green); }
+.ttitle { font-family: var(--mono); font-size: 11px; color: var(--t2); margin-left: 8px; font-weight: 500;}
+.tbody { 
+  flex: 1; padding: 16px 20px; font-family: var(--mono); font-size: 12.5px; 
+  line-height: 1.8; overflow: hidden; display: flex; flex-direction: column; justify-content: center;
+}
+.tp { color: var(--green); } .tc { color: #FFF; } .to { color: var(--cyan); } .tm { color: var(--t2); }
+.ta { color: var(--amber); } .tg { color: #2A6A44; }
+.tsep { height: 1px; background: var(--b1); margin: 12px 0; }
+.tlbl { font-size: 10px; color: var(--t2); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
+
+/* ── RIGHT AREA: CAPABILITIES CARD ── */
+.caps-card {
+  flex: 1; display: flex; flex-direction: column; justify-content: center;
+  padding: 20px 24px; font-size: 13.5px; line-height: 1.55; color: var(--t2);
+}
+.caps-card p {
+  margin-bottom: 16px; font-size: 14.5px; color: #FFF; font-weight: 500;
+}
+.caps-card ul {
+  list-style: none; padding-left: 0; display: flex; flex-direction: column; gap: 14px; margin: 0;
+}
+.caps-card li {
+  position: relative; padding-left: 28px;
+  display: flex; align-items: flex-start;
+}
+.caps-card li svg {
+  position: absolute; left: 0; top: 2px;
+  width: 18px; height: 18px;
+}
+.caps-card strong {
+  color: var(--cyan); font-weight: 600; letter-spacing: 0.03em;
+}
+.caps-card code {
+  font-family: var(--mono); font-size: 11px; color: var(--amber); background: var(--bg3);
+  padding: 2px 5px; border-radius: 4px; border: 1px solid var(--b2);
+}
+</style>
+</head>
+<body>
+<div class="poster">
+<div class="scan"></div>
+
+<header class="hdr">
+  <img src="Waterloo_Engineering_Logo_horiz_rev_rgb.png" style="max-width: 250px; height: auto;" alt="Waterloo Engineering Logo">
+  <div class="hdr-logo-box">
+    <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+      <rect x="2" y="2" width="32" height="32" rx="6" stroke="#00E06A" stroke-width="1.5"/>
+      <path d="M7 12L15 18L7 24" stroke="#00E06A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="17" y1="24" x2="29" y2="24" stroke="#00BEF0" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="27" cy="12" r="2.8" stroke="#9B72FF" stroke-width="1.5"/>
+      <circle cx="17" cy="12" r="2.8" stroke="#9B72FF" stroke-width="1.5"/>
+      <line x1="17" y1="12" x2="24" y2="12" stroke="#9B72FF" stroke-width="1.5" stroke-dasharray="2 2"/>
+    </svg>
+  </div>
+  <div class="hdr-title">THE BLANK OSL</div>
+
+  <div class="hdr-div"></div>
+
+  <div class="hdr-team">
+    <div class="hdr-team-lbl">TEAM MEMBERS</div>
+    <div class="hdr-team-names">Pouria Amini · Shirley Fang · Evan He · Tony Li · Alan Zhu</div>
+    <div class="hdr-mentor-lbl">MENTORS</div>
+    <div class="hdr-mentor-names">Ramani Tyagi · Paul Ward</div>
+  </div>
+
+  <div class="hdr-right" style="margin-left: auto;">
+    <div class="hdr-r2">macOS &nbsp;·&nbsp; Windows &nbsp;·&nbsp; Linux</div>
+    <div class="hdr-r2" style="color:var(--green); margin-top:4px;">Claude Desktop Compatible</div>
+  </div>
+</header>
+
+<div class="body">
+
+  <div class="left-col">
+    <div style="flex-shrink: 0;">
+      <div class="section-header">
+        <span class="sh-num">01</span>
+        <span class="sh-title">ABSTRACT</span>
+        <div class="sh-ln"></div>
+      </div>
+      <div class="card abstract-card">
+        <p>The <em>Blank Operating System Layer</em> makes OS control more expressive via an <em>LLM</em>, a client, and multiple servers communicating through the <strong>Model Context Protocol (MCP)</strong>.</p>
+        <p>Servers span three primary categories: <strong>Filesystem</strong> (read, write, search), <strong>Process Manager</strong> (spawn, monitor system attributes), and <strong>Miscellaneous</strong> (extensible plugins like weather or Wikipedia).</p>
+        <p>The client parses natural-language tasks, formats them via an LLM (such as Gemini, ChatGPT, or local alternatives), and exposes underlying operation details for user review prior to local execution.</p>
+      </div>
+    </div>
+<br></br>
+    <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+      <div class="section-header">
+        <span class="sh-num">02</span>
+        <span class="sh-title">HOW IT WORKS</span>
+        <div class="sh-ln"></div>
+      </div>
+      <div class="card steps">
+        <div class="step">
+          <div class="sl"><div class="sn">1</div><div class="sline"></div></div>
+          <div class="sc">
+            <div class="sname">Configure</div>
+            <div class="sdesc">Load MCP config JSON (Claude Desktop format). Settings persist atomically to <code style="font-family:var(--mono);font-size:10px">~/.blankosl_cli/</code>.</div>
+            <span class="scmd">--mcp-path</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="sl"><div class="sn">2</div><div class="sline"></div></div>
+          <div class="sc">
+            <div class="sname">Connect</div>
+            <div class="sdesc">McpManager spawns server subprocesses and completes the MCP initialization handshake.</div>
+            <span class="scmd">initialize</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="sl"><div class="sn">3</div><div class="sline"></div></div>
+          <div class="sc">
+            <div class="sname">Discover</div>
+            <div class="sdesc">Tools are fetched from all connected servers and formatted into the LLM's system prompt.</div>
+            <span class="scmd">tools/list</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="sl"><div class="sn">4</div><div class="sline"></div></div>
+          <div class="sc">
+            <div class="sname">Chat &amp; Review</div>
+            <div class="sdesc">The LLM converts intent to an MCP message. Client prompts for user review before dispatch.</div>
+            <span class="scmd">Gemini API</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="sl"><div class="sn">5</div></div>
+          <div class="sc">
+            <div class="sname">Execute</div>
+            <div class="sdesc">Tool calls are dispatched via JSON-RPC. Results are injected back into context for follow-ups.</div>
+            <span class="scmd">tools/call</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-area">
+    <div>
+      <div class="section-header">
+        <span class="sh-num">03</span>
+        <span class="sh-title">SYSTEM ARCHITECTURE</span>
+        <div class="sh-ln"></div>
+      </div>
+      <div class="card arch-wrap">
+        <svg width="100%" viewBox="0 0 836 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="ag" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M20 0L0 0 0 20" fill="none" stroke="#0F182A" stroke-width="0.5"/>
+            </pattern>
+            <marker id="mg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+              <path d="M1.5 2L8 5L1.5 8" fill="none" stroke="#00E06A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+            <marker id="mc" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+              <path d="M1.5 2L8 5L1.5 8" fill="none" stroke="#00BEF0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+            <marker id="mp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+              <path d="M1.5 2L8 5L1.5 8" fill="none" stroke="#9B72FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+            <marker id="ma" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+              <path d="M1.5 2L8 5L1.5 8" fill="none" stroke="#F0A020" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+            <marker id="mr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+              <path d="M1.5 2L8 5L1.5 8" fill="none" stroke="#FF4A65" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+          <rect width="836" height="300" fill="#07091A" rx="10"/>
+          <rect width="836" height="300" fill="url(#ag)" rx="10"/>
+
+          <rect x="22" y="14" width="128" height="40" rx="7" fill="#0B1020" stroke="#172030" stroke-width="1"/>
+          <text x="86" y="30" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11.5" font-weight="600" fill="#BEC8DE">User CLI</text>
+          <text x="86" y="46" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8.5" fill="#5A6E88">main.py · Typer · Rich</text>
+
+          <rect x="22" y="72" width="128" height="40" rx="7" fill="#090E1C" stroke="#172030" stroke-width="1"/>
+          <text x="86" y="87" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" font-weight="600" fill="#A0AABE">Settings</text>
+          <text x="86" y="103" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8.5" fill="#2E4060">settings.py · utils.py</text>
+
+          <rect x="22" y="130" width="128" height="40" rx="7" fill="#07101A" stroke="#00BEF030" stroke-width="1"/>
+          <text x="86" y="146" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" font-weight="600" fill="#70B8D8">Config Parser</text>
+          <text x="86" y="162" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8.5" fill="#2A5868">mcp_config_parser.py</text>
+
+          <rect x="22" y="188" width="128" height="40" rx="7" fill="#0A091C" stroke="#9B72FF30" stroke-width="1"/>
+          <text x="86" y="204" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" font-weight="600" fill="#A090D8">Sampling Engine</text>
+          <text x="86" y="220" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8.5" fill="#483878">sampling.py</text>
+
+          <line x1="86" y1="54"  x2="86" y2="70"  stroke="#1A2840" stroke-width="1" marker-end="url(#mg)"/>
+          <line x1="86" y1="112" x2="86" y2="128" stroke="#1A2840" stroke-width="1" marker-end="url(#mc)"/>
+          <line x1="86" y1="170" x2="86" y2="186" stroke="#1A2840" stroke-width="1" marker-end="url(#mp)"/>
+
+          <rect x="262" y="82" width="158" height="110" rx="9" fill="#06120A" stroke="#00E06A" stroke-width="1.8" stroke-opacity=".85"/>
+          <rect x="262" y="82" width="158" height="110" rx="9" fill="#00E06A03"/>
+          <text x="341" y="118" text-anchor="middle" font-family="'Bebas Neue',sans-serif" font-size="22" fill="#00E06A">McpManager</text>
+          <text x="341" y="137" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8.5" fill="#2A6A40">mcp_manager.py</text>
+          <text x="341" y="153" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8" fill="#2A6A40">Lifecycle · Routing · Roots</text>
+          <text x="341" y="168" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8" fill="#2A6A40">Elicitation · Request handler</text>
+          <text x="341" y="183" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8" fill="#2A6A40">Process spawn · stderr capture</text>
+
+          <rect x="281" y="206" width="120" height="36" rx="7" fill="#14060A" stroke="#FF4A6550" stroke-width="1.2"/>
+          <text x="341" y="221" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" font-weight="600" fill="#E08090">LLM Provider</text>
+          <text x="341" y="235" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8" fill="#A05060">Gemini / Claude / Local</text>
+          <line x1="336" y1="194" x2="336" y2="204" stroke="#FF4A6560" stroke-width="1.2" marker-end="url(#mr)"/>
+          <line x1="346" y1="204" x2="346" y2="194" stroke="#FF4A6560" stroke-width="1.2" marker-end="url(#mr)"/>
+
+          <path d="M150 34 Q206 34 262 137" stroke="#00E06A70" stroke-width="1.2" fill="none" marker-end="url(#mg)"/>
+          <path d="M150 92 Q206 92 262 150" stroke="#1A2840"   stroke-width="1"   fill="none" marker-end="url(#mg)"/>
+          <path d="M150 150 Q206 150 262 163" stroke="#00BEF055" stroke-width="1" fill="none" marker-end="url(#mc)"/>
+          <path d="M150 208 Q206 208 262 175" stroke="#9B72FF45" stroke-width="1" fill="none" marker-end="url(#mp)"/>
+
+          <rect x="430" y="10" width="360" height="278" rx="8" fill="none" stroke="#172030" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="610" y="22" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8.5" fill="#2E3E58" letter-spacing=".08em">SUBPROCESSES  ·  JSON-RPC 2.0</text>
+
+          <rect x="450" y="28" width="140" height="52" rx="6" fill="#041014" stroke="#00BEF030" stroke-width="1"/>
+          <text x="520" y="50" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="10.5" font-weight="600" fill="#60B0D0">McpTransport</text>
+          <text x="520" y="66" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8" fill="#2A6A80">stdin/stdout · asyncio</text>
+
+          <rect x="640" y="28" width="130" height="52" rx="7" fill="#060E18" stroke="#00BEF040" stroke-width="1.2"/>
+          <text x="705" y="49" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" font-weight="600" fill="#60B0D0">McpServer</text>
+          <text x="705" y="65" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9.5" fill="#00BEF0">filesystem</text>
+
+          <rect x="450" y="106" width="140" height="52" rx="6" fill="#141004" stroke="#F0A02030" stroke-width="1"/>
+          <text x="520" y="128" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="10.5" font-weight="600" fill="#D0B060">McpTransport</text>
+          <text x="520" y="144" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8" fill="#806A2A">stdin/stdout · asyncio</text>
+
+          <rect x="640" y="106" width="130" height="52" rx="7" fill="#0A0A08" stroke="#F0A02038" stroke-width="1.2"/>
+          <text x="705" y="127" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" font-weight="600" fill="#C09060">McpServer</text>
+          <text x="705" y="143" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9.5" fill="#F0A020">archive-manager</text>
+
+          <rect x="450" y="184" width="140" height="52" rx="6" fill="#100414" stroke="#9B72FF30" stroke-width="1"/>
+          <text x="520" y="206" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="10.5" font-weight="600" fill="#B080D0">McpTransport</text>
+          <text x="520" y="222" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8" fill="#6A4080">stdin/stdout · asyncio</text>
+
+          <rect x="640" y="184" width="130" height="52" rx="7" fill="#08080E" stroke="#9B72FF38" stroke-width="1.2"/>
+          <text x="705" y="205" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" font-weight="600" fill="#8888C0">McpServer</text>
+          <text x="705" y="221" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9.5" fill="#9B72FF">contacts</text>
+          
+          <rect x="450" y="246" width="320" height="32" rx="7" fill="#05080F" stroke="#1E2C42" stroke-width="1.5" stroke-dasharray="5 5"/>
+          <text x="610" y="265" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="11" font-weight="500" fill="#4A5D7A">+ N more servers...</text>
+
+          <line x1="420" y1="128" x2="448" y2="54"  stroke="#00BEF050" stroke-width="1.2" marker-end="url(#mc)"/>
+          <line x1="420" y1="137" x2="448" y2="132" stroke="#F0A02050" stroke-width="1.2" marker-end="url(#ma)"/>
+          <line x1="420" y1="148" x2="448" y2="210" stroke="#9B72FF50" stroke-width="1.1" marker-end="url(#mp)"/>
+
+          <line x1="590" y1="54" x2="638" y2="54" stroke="#00BEF060" stroke-width="1" marker-end="url(#mc)"/>
+          <line x1="590" y1="132" x2="638" y2="132" stroke="#F0A02060" stroke-width="1" marker-end="url(#ma)"/>
+          <line x1="590" y1="210" x2="638" y2="210" stroke="#9B72FF60" stroke-width="1" marker-end="url(#mp)"/>
+
+        </svg>
+      </div>
+    </div>
+
+    <div class="right-bottom">
+      <div style="display: flex; flex-direction: column; min-height: 0;">
+        <div class="section-header">
+          <span class="sh-num">04</span>
+          <span class="sh-title">INTERACTIVE SESSION</span>
+          <div class="sh-ln"></div>
+        </div>
+        <div class="term">
+          <div class="tbar">
+            <span class="td r"></span><span class="td y"></span><span class="td g"></span>
+            <span class="ttitle">blankosl_cli — interactive · tool executor</span>
+          </div>
+          <div class="tbody">
+            <div class="tlbl">── live session ──</div>
+            <div><span class="tp">$</span> <span class="tc">blankosl_cli</span></div>
+            <div style="padding-left:6px"><span class="to">  ✓ Loaded 3 servers · 15 tools</span></div>
+            <div style="height:10px"></div>
+            
+            <div style="padding-left:4px"><span class="ta">You ›</span> <span class="tc">Find .py files from this week and zip to desktop</span></div>
+            <div style="padding-left:12px"><span class="tg">↳ [search_files] → [compress_zip]</span></div>
+            <div style="padding-left:12px"><span class="to">✓ ~/Desktop/python_files.zip  (2.1 MB)</span></div>
+            <div style="height:10px"></div>
+            
+            <div style="padding-left:4px"><span class="ta">You ›</span> <span class="tc">Add Jane Doe — j@x.com, age 30</span></div>
+            <div style="padding-left:12px"><span class="tg">↳ [add_contact]</span></div>
+            <div style="padding-left:12px"><span class="to">✓ Contact #42 saved to SQLite</span></div>
+            
+            <div class="tsep"></div>
+            
+            <div class="tlbl">── direct tool calls ──</div>
+            <div><span class="tp">$</span> <span class="tc">blankosl_cli call compress_zip \</span></div>
+            <div style="padding-left:6px"><span class="tm">  --args '{"sources":["/data/logs"],"output_path":"~/Desktop/logs.zip"}'</span></div>
+            <div style="padding-left:6px"><span class="to">  ✓ ~/Desktop/logs.zip  (2.3 MB → 480 KB)</span></div>
+            <div style="height:10px"></div>
+            
+            <div><span class="tp">$</span> <span class="tc">blankosl_cli tools list-all</span></div>
+            <div style="padding-left:6px"><span class="tm">  filesystem   ›  read_file, write_file, search_files +9</span></div>
+            <div style="padding-left:6px"><span class="tm">  archive      ›  compress_zip, compress_7z, compress_tar +5</span></div>
+            <div style="padding-left:6px"><span class="tm">  contacts     ›  add_contact, search_contacts, list +2</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; min-height: 0;">
+        <div class="section-header">
+          <span class="sh-num">05</span>
+          <span class="sh-title">CORE CAPABILITIES</span>
+          <div class="sh-ln"></div>
+        </div>
+        <div class="card caps-card">
+          <p>The Blank OSL seamlessly orchestrates multiple async servers through a robust plugin architecture:</p>
+          <ul>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              <div><strong>Filesystem:</strong> 15+ asynchronous operations (read, write, search, copy, move) powered by <code>aiofiles</code>, complete with deep regex metadata search.</div>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><path d="M7 15h0M2 9.5h20"></path></svg>
+              <div><strong>Archive Manager:</strong> Secure, Tar-Slip protected async compression and decompression for ZIP, 7z, and TAR formats.</div>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              <div><strong>Contacts Manager:</strong> Comprehensive CRUD functionality and full-text search capabilities backed by <code>aiosqlite</code>.</div>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              <div><strong>LLM Sampling:</strong> Formats dynamic tool manifests into system prompts and accurately parses <code>TOOL_CALL</code> JSON blocks using LLM.</div>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              <div><strong>Config & Settings:</strong> Global CLI state management at <code>~/.blankosl_cli/</code> ensuring atomic temp-file writes and environment variable expansion.</div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+</body>
+</html>
