@@ -2,7 +2,7 @@ import csv
 import os
 from pathlib import Path
 from typing import List, Dict, Union, Any, Optional
-from anyio import to_thread  # Updated import to fix IDE type checking
+from anyio import to_thread
 from mcp.server.fastmcp import FastMCP
 
 # Initialize MCP server
@@ -33,13 +33,14 @@ def _get_headers_sync(path: Path) -> List[str]:
         except StopIteration:
             return []
 
-def _create_csv_sync(path: Path, headers: List[str]) -> None:
+def _create_csv_sync(path: Path, headers: List[str]) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=headers)
         writer.writeheader()
+    return True
 
-def _append_rows_sync(path: Path, rows: List[Dict[str, str]]) -> None:
+def _append_rows_sync(path: Path, rows: List[Dict[str, str]]) -> bool:
     if not path.exists():
         raise FileNotFoundError(f"CSV file not found: {path}. Create it first.")
     
@@ -47,6 +48,7 @@ def _append_rows_sync(path: Path, rows: List[Dict[str, str]]) -> None:
     with open(path, 'a', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=headers, extrasaction='ignore')
         writer.writerows(rows)
+    return True
 
 def _update_rows_sync(path: Path, filter_col: str, filter_val: str, update_data: Dict[str, str]) -> int:
     with open(path, 'r', newline='', encoding='utf-8') as f:
@@ -93,7 +95,7 @@ def _delete_rows_sync(path: Path, filter_col: str, filter_val: str) -> int:
 
     return deleted_count
 
-def _add_column_sync(path: Path, column_name: str, default_value: str = "") -> None:
+def _add_column_sync(path: Path, column_name: str, default_value: str = "") -> bool:
     with open(path, 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         headers = reader.fieldnames
@@ -112,8 +114,9 @@ def _add_column_sync(path: Path, column_name: str, default_value: str = "") -> N
         writer = csv.DictWriter(f, fieldnames=headers)
         writer.writeheader()
         writer.writerows(rows)
+    return True
 
-def _delete_column_sync(path: Path, column_name: str) -> None:
+def _delete_column_sync(path: Path, column_name: str) -> bool:
     with open(path, 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         headers = reader.fieldnames
@@ -132,8 +135,9 @@ def _delete_column_sync(path: Path, column_name: str) -> None:
         writer = csv.DictWriter(f, fieldnames=headers)
         writer.writeheader()
         writer.writerows(rows)
+    return True
 
-def _rename_column_sync(path: Path, old_name: str, new_name: str) -> None:
+def _rename_column_sync(path: Path, old_name: str, new_name: str) -> bool:
     with open(path, 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         headers = reader.fieldnames
@@ -146,17 +150,16 @@ def _rename_column_sync(path: Path, old_name: str, new_name: str) -> None:
             
         rows = list(reader)
 
-    # Replace the old header with the new one, preserving order
     headers = [new_name if h == old_name else h for h in headers]
     
     for row in rows:
-        # Transfer the value to the new key and remove the old key
         row[new_name] = row.pop(old_name, "")
 
     with open(path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=headers)
         writer.writeheader()
         writer.writerows(rows)
+    return True
 
 
 # ----------------------------
@@ -189,28 +192,34 @@ async def get_csv_headers(path: PathLike) -> List[str]:
     return await to_thread.run_sync(_get_headers_sync, _resolve_path(path))
 
 @mcp.tool()
-async def create_csv(path: PathLike, headers: List[str]) -> None:
+async def create_csv(path: PathLike, headers: List[str]) -> bool:
     """Create a new, empty CSV file with the specified headers.
     
     Args:
         path: Path where the CSV should be created.
         headers: List of column names.
+        
+    Returns:
+        True if successful.
     """
-    await to_thread.run_sync(_create_csv_sync, _resolve_path(path), headers)
+    return await to_thread.run_sync(_create_csv_sync, _resolve_path(path), headers)
 
 @mcp.tool()
-async def append_rows(path: PathLike, rows: List[Dict[str, Any]]) -> None:
+async def append_rows(path: PathLike, rows: List[Dict[str, Any]]) -> bool:
     """Append one or more rows to an existing CSV file.
     
     Args:
         path: Path to the CSV file.
         rows: List of dictionaries representing the rows to append. Keys must match headers.
+        
+    Returns:
+        True if successful.
     """
     stringified_rows = [{k: str(v) for k, v in row.items()} for row in rows]
-    await to_thread.run_sync(_append_rows_sync, _resolve_path(path), stringified_rows)
+    return await to_thread.run_sync(_append_rows_sync, _resolve_path(path), stringified_rows)
 
 @mcp.tool()
-async def update_rows(path: PathLike, filter_column: str, filter_value: Any, update_data: Dict[str, Any]) -> str:
+async def update_rows(path: PathLike, filter_column: str, filter_value: Any, update_data: Dict[str, Any]) -> int:
     """Update existing rows in a CSV where a specific column matches a value.
     
     Args:
@@ -220,19 +229,18 @@ async def update_rows(path: PathLike, filter_column: str, filter_value: Any, upd
         update_data: Dictionary of column/value pairs to update on matching rows.
         
     Returns:
-        A string confirming how many rows were updated.
+        Integer representing the number of rows updated.
     """
-    count = await to_thread.run_sync(
+    return await to_thread.run_sync(
         _update_rows_sync, 
         _resolve_path(path), 
         filter_column, 
         str(filter_value), 
         update_data
     )
-    return f"Successfully updated {count} row(s)."
 
 @mcp.tool()
-async def delete_rows(path: PathLike, filter_column: str, filter_value: Any) -> str:
+async def delete_rows(path: PathLike, filter_column: str, filter_value: Any) -> int:
     """Delete rows from a CSV where a specific column matches a value.
     
     Args:
@@ -241,18 +249,17 @@ async def delete_rows(path: PathLike, filter_column: str, filter_value: Any) -> 
         filter_value: The value to match in the filter_column to trigger deletion.
         
     Returns:
-        A string confirming how many rows were deleted.
+        Integer representing the number of rows deleted.
     """
-    count = await to_thread.run_sync(
+    return await to_thread.run_sync(
         _delete_rows_sync, 
         _resolve_path(path), 
         filter_column, 
         str(filter_value)
     )
-    return f"Successfully deleted {count} row(s)."
 
 @mcp.tool()
-async def add_column(path: PathLike, column_name: str, default_value: Any = "") -> str:
+async def add_column(path: PathLike, column_name: str, default_value: Any = "") -> bool:
     """Add a new column to an existing CSV file.
     
     Args:
@@ -261,18 +268,17 @@ async def add_column(path: PathLike, column_name: str, default_value: Any = "") 
         default_value: The value to fill into the new column for all existing rows (defaults to empty string).
         
     Returns:
-        Success message.
+        True if successful.
     """
-    await to_thread.run_sync(
+    return await to_thread.run_sync(
         _add_column_sync, 
         _resolve_path(path), 
         column_name, 
         str(default_value)
     )
-    return f"Successfully added column '{column_name}'."
 
 @mcp.tool()
-async def delete_column(path: PathLike, column_name: str) -> str:
+async def delete_column(path: PathLike, column_name: str) -> bool:
     """Delete a column from an existing CSV file.
     
     Args:
@@ -280,17 +286,16 @@ async def delete_column(path: PathLike, column_name: str) -> str:
         column_name: Name of the column to delete.
         
     Returns:
-        Success message.
+        True if successful.
     """
-    await to_thread.run_sync(
+    return await to_thread.run_sync(
         _delete_column_sync, 
         _resolve_path(path), 
         column_name
     )
-    return f"Successfully deleted column '{column_name}'."
 
 @mcp.tool()
-async def rename_column(path: PathLike, old_name: str, new_name: str) -> str:
+async def rename_column(path: PathLike, old_name: str, new_name: str) -> bool:
     """Rename a column in an existing CSV file.
     
     Args:
@@ -299,16 +304,14 @@ async def rename_column(path: PathLike, old_name: str, new_name: str) -> str:
         new_name: The new name for the column.
         
     Returns:
-        Success message.
+        True if successful.
     """
-    await to_thread.run_sync(
+    return await to_thread.run_sync(
         _rename_column_sync, 
         _resolve_path(path), 
         old_name,
         new_name
     )
-    return f"Successfully renamed column '{old_name}' to '{new_name}'."
-
 
 if __name__ == "__main__":
     # Initialize and run the server
