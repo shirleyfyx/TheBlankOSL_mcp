@@ -83,18 +83,21 @@ async def read_file(path: PathLike, encoding: str = "utf-8") -> str:
 
 
 @mcp.tool()
-async def write_file(path: PathLike, content: str, encoding: str = "utf-8") -> None:
+async def write_file(path: PathLike, content: str, encoding: str = "utf-8") -> str:
     """Write content to a file asynchronously, overwriting if it exists.
 
     Args:
         path: Path to the file.
         content: Content to write.
         encoding: File encoding (default 'utf-8').
+    Returns:
+        Absolute path to the written file.
     """
     resolved = _resolve_path(path)
     resolved.parent.mkdir(parents=True, exist_ok=True)
     async with aiofiles.open(resolved, mode="w", encoding=encoding) as f:
         await f.write(content)
+    return str(resolved)
 
 
 @mcp.tool()

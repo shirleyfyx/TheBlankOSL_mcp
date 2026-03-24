@@ -26,6 +26,8 @@ from .commands.tools import list_tools_logic, info_tool_logic
 from .commands.call import call_tool_logic
 from .commands.config import show_config_logic
 
+NON_IDEMPOTENT_TOOLS = {"send_email"}
+
 
 def _looks_like_placeholder_content(s: str) -> bool:
     """True if write_file content is a placeholder instead of real data."""
@@ -541,6 +543,16 @@ async def interactive_session():
                                         ),
                                     )
                                     not in _executed_sigs
+                                ]
+
+                                executed_names = {tc["name"] for tc in tool_calls}
+                                chain_calls = [
+                                    tc
+                                    for tc in chain_calls
+                                    if not (
+                                        tc["name"] in NON_IDEMPOTENT_TOOLS
+                                        and tc["name"] in executed_names
+                                    )
                                 ]
                                 if chain_calls:
                                     chat_history.append(
