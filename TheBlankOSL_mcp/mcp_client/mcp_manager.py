@@ -20,6 +20,7 @@ except ImportError:
 
 class UserRejectedError(Exception):
     """Raised when user rejects a sampling request or response. Spec error code -1."""
+
     code = -1
 
 
@@ -29,6 +30,7 @@ class McpManager:
     Manages multiple McpServer instances and routes requests.
     Supports MCP client features: roots and elicitation.
     """
+
     def __init__(self):
         self.sessions: Dict[str, McpServer] = {}
         # Roots: list of {"uri": "file:///...", "name": "..."}; servers can request via roots/list
@@ -74,15 +76,12 @@ class McpManager:
                 error_msg = f"{type(result).__name__}: {str(result)}"
                 if name in self.sessions:
                     server = self.sessions[name]
-                    if hasattr(server, '_get_stderr_summary'):
+                    if hasattr(server, "_get_stderr_summary"):
                         stderr = server._get_stderr_summary()
                         if stderr:
                             error_msg += f"\n  Stderr: {stderr}"
-                
-                results_summary["failed"].append({
-                    "name": name,
-                    "error": error_msg
-                })
+
+                results_summary["failed"].append({"name": name, "error": error_msg})
                 # Remove from active sessions
                 if name in self.sessions:
                     del self.sessions[name]
@@ -111,7 +110,7 @@ class McpManager:
         Finds the server that owns 'tool_name' and executes it.
         """
         target_server = None
-        
+
         # Discovery Phase: Find which server has the tool
         # (In a production app, cache this mapping)
         for server in self.sessions.values():
@@ -123,10 +122,10 @@ class McpManager:
                         break
             except Exception:
                 continue
-            
+
             if target_server:
                 break
-        
+
         if not target_server:
             raise ValueError(f"Tool '{tool_name}' not found on any active server.")
 
@@ -138,6 +137,7 @@ class McpManager:
         Returns an async handler (method, params) -> result for server requests:
         roots/list, elicitation/create, sampling/createMessage.
         """
+
         async def handle(method: str, params: Dict[str, Any]) -> Any:
             if method == "roots/list":
                 return {"roots": self.roots}
@@ -167,7 +167,11 @@ class McpManager:
             if kind == "tool_result":
                 tid = content.get("toolUseId", "")
                 parts = content.get("content", [])
-                texts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("type") == "text"]
+                texts = [
+                    p.get("text", "")
+                    for p in parts
+                    if isinstance(p, dict) and p.get("type") == "text"
+                ]
                 return f"[Tool result id={tid}]: " + " ".join(texts)
             if kind == "image":
                 return "[image]"
@@ -175,11 +179,15 @@ class McpManager:
                 return "[audio]"
             return ""
         if isinstance(content, list):
-            return " ".join(McpManager._spec_content_to_string(c) for c in content).strip()
+            return " ".join(
+                McpManager._spec_content_to_string(c) for c in content
+            ).strip()
         return ""
 
     @classmethod
-    def _spec_messages_to_chat(cls, messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    def _spec_messages_to_chat(
+        cls, messages: List[Dict[str, Any]]
+    ) -> List[Dict[str, str]]:
         """Convert MCP sampling messages to our chat format [{role, content: str}, ...]."""
         out: List[Dict[str, str]] = []
         for m in messages or []:
@@ -189,7 +197,9 @@ class McpManager:
                 out.append({"role": role, "content": content})
         return out
 
-    async def _run_sampling_create_message(self, server_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _run_sampling_create_message(
+        self, server_name: str, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Handle sampling/createMessage per MCP spec: run server's request through our LLM,
         optional human-in-the-loop approval, return { role, content, model, stopReason }.
@@ -217,8 +227,14 @@ class McpManager:
             console.print(f"\n[bold cyan][{server_name}][/bold cyan] Sampling request:")
             console.print(f"[dim]{preview}[/dim]")
             if not Prompt:
-                return (input("Approve sampling request? [Y/n]: ").strip().lower() or "y") in ("y", "yes")
-            reply = Prompt.ask("Approve sampling request? [Y/n]", default="Y").strip().lower()
+                return (
+                    input("Approve sampling request? [Y/n]: ").strip().lower() or "y"
+                ) in ("y", "yes")
+            reply = (
+                Prompt.ask("Approve sampling request? [Y/n]", default="Y")
+                .strip()
+                .lower()
+            )
             return reply in ("", "y", "yes")
 
         try:
@@ -230,7 +246,7 @@ class McpManager:
 
         # Resolve LLM client
         try:
-            client = (self._llm_getter() if self._llm_getter else get_client("gemini"))
+            client = self._llm_getter() if self._llm_getter else get_client("gemini")
         except Exception as e:
             raise RuntimeError(f"LLM not available: {e}") from e
         if client is None:
@@ -246,7 +262,9 @@ class McpManager:
             last_content = our_messages[-1].get("content", "") if our_messages else ""
             if system_prompt:
                 last_content = system_prompt + "\n\n" + last_content
-            reply_text, tool_calls = await run_sampling_turn(self, client, chat_history, last_content, tools_context)
+            reply_text, tool_calls = await run_sampling_turn(
+                self, client, chat_history, last_content, tools_context
+            )
             if tool_calls:
                 content_spec = [
                     {
@@ -286,12 +304,19 @@ class McpManager:
         # Human-in-the-loop: approve response (same MCP request 1/N panel style as chat flow)
         def approve_response():
             if isinstance(result.get("content"), list):
-                tool_parts = [c for c in result["content"] if c.get("type") == "tool_use"]
+                tool_parts = [
+                    c for c in result["content"] if c.get("type") == "tool_use"
+                ]
                 n = len(tool_parts)
                 if Panel and n:
                     for i, c in enumerate(tool_parts):
-                        title = f"[bold cyan]MCP request (sampling) {i + 1}/{n}[/bold cyan]"
-                        body = json.dumps({"name": c.get("name"), "arguments": c.get("input", {})}, indent=2)
+                        title = (
+                            f"[bold cyan]MCP request (sampling) {i + 1}/{n}[/bold cyan]"
+                        )
+                        body = json.dumps(
+                            {"name": c.get("name"), "arguments": c.get("input", {})},
+                            indent=2,
+                        )
                         console.print(Panel(body, title=title, border_style="cyan"))
                 else:
                     console.print("[dim]Tool use(s) to return to server[/dim]")
@@ -301,7 +326,10 @@ class McpManager:
                 text = (result.get("content") or {}).get("text", "")[:400]
                 console.print(f"[dim]{text}[/dim]")
             if not Prompt:
-                return (input("Approve response? [Y/n]: ").strip().lower() or "y") in ("y", "yes")
+                return (input("Approve response? [Y/n]: ").strip().lower() or "y") in (
+                    "y",
+                    "yes",
+                )
             reply = Prompt.ask("Approve response? [Y/n]", default="Y").strip().lower()
             return reply in ("", "y", "yes")
 
@@ -314,7 +342,9 @@ class McpManager:
 
         return result
 
-    async def _run_elicitation_ui(self, server_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _run_elicitation_ui(
+        self, server_name: str, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Run elicitation UI (form or URL mode). Blocking prompts run in thread.
         Returns {"action": "accept", "content": {...}} or {"action": "decline", "reason": "..."}.
@@ -326,11 +356,16 @@ class McpManager:
             return await self._elicitation_url(server_name, message, params)
         return await self._elicitation_form(server_name, message, params)
 
-    async def _elicitation_url(self, server_name: str, message: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _elicitation_url(
+        self, server_name: str, message: str, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """URL mode: show message and URL, ask user to open; return accept or decline."""
         url = params.get("url") or ""
         if not url:
-            return {"action": "decline", "reason": "Missing url in elicitation request."}
+            return {
+                "action": "decline",
+                "reason": "Missing url in elicitation request.",
+            }
 
         def prompt_url():
             console.print(f"\n[bold cyan][{server_name}][/bold cyan] {message}")
@@ -343,15 +378,25 @@ class McpManager:
 
         try:
             ok = await asyncio.to_thread(prompt_url)
-            return {"action": "accept"} if ok else {"action": "decline", "reason": "User declined."}
+            return (
+                {"action": "accept"}
+                if ok
+                else {"action": "decline", "reason": "User declined."}
+            )
         except Exception as e:
             return {"action": "decline", "reason": str(e)}
 
-    async def _elicitation_form(self, server_name: str, message: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _elicitation_form(
+        self, server_name: str, message: str, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Form mode: build prompts from requestedSchema, collect and validate, return accept with content or decline."""
         schema = params.get("requestedSchema") or {}
         if schema.get("type") != "object":
-            schema = {"type": "object", "properties": schema.get("properties", {}), "required": schema.get("required", [])}
+            schema = {
+                "type": "object",
+                "properties": schema.get("properties", {}),
+                "required": schema.get("required", []),
+            }
         properties = schema.get("properties") or {}
         required = schema.get("required") or []
 
@@ -378,9 +423,15 @@ class McpManager:
 
                 if ptype == "boolean":
                     if Prompt:
-                        reply = Prompt.ask(prompt_text, default="y" if default else "n").strip().lower()
+                        reply = (
+                            Prompt.ask(prompt_text, default="y" if default else "n")
+                            .strip()
+                            .lower()
+                        )
                     else:
-                        reply = (input(f"{prompt_text} (y/n): ").strip().lower() or ("y" if default else "n"))
+                        reply = input(f"{prompt_text} (y/n): ").strip().lower() or (
+                            "y" if default else "n"
+                        )
                     out[key] = reply in ("y", "yes", "true", "1")
                 elif ptype in ("number", "integer"):
                     if Prompt:
@@ -393,16 +444,24 @@ class McpManager:
                         out[key] = reply
                 else:
                     if Prompt:
-                        reply = Prompt.ask(prompt_text, default=default_str).strip()
+                        # Check if the property name or title contains "password"
+                        is_password = (
+                            "password" in key.lower() or "password" in title.lower()
+                        )
+                        reply = Prompt.ask(
+                            prompt_text, default=default_str, password=is_password
+                        ).strip()
                     else:
                         reply = input(f"{prompt_text}: ").strip() or default_str
                     out[key] = reply
 
             # Optional: decline option
             if Prompt:
-                decline = Prompt.ask("Submit this form? [Y/n]", default="Y").strip().lower()
+                decline = (
+                    Prompt.ask("Submit this form? [Y/n]", default="Y").strip().lower()
+                )
             else:
-                decline = (input("Submit this form? (Y/n): ").strip().lower() or "y")
+                decline = input("Submit this form? (Y/n): ").strip().lower() or "y"
             if decline in ("n", "no"):
                 return None
             return out

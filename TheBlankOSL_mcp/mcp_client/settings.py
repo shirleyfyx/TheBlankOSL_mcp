@@ -3,27 +3,31 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from dataclasses import dataclass, asdict
 
+
 @dataclass
 class CliSettings:
     """
     Data container for global CLI preferences.
-    
+
     Attributes:
         mcp_config_path: Absolute path to the MCP server JSON configuration.
         default_model: The LLM model identifier used for chat sessions.
         auto_confirm: Whether to skip confirmation prompts for tool calls.
     """
+
     mcp_config_path: Optional[str] = None
     default_llm: str = "Google Gemini"
     gemini_api_key: str = ""
     groq_api_key: str = ""
     auto_confirm: bool = False
 
+
 class SettingsManager:
     """
     Manages the lifecycle of the global CLI settings file (~/.blankosl_cli/settings.json).
     Handles atomic writes and directory initialization.
     """
+
     def __init__(self):
         """Initializes the manager and ensures the configuration directory exists."""
         self.config_dir = Path.home() / ".blankosl_cli"
@@ -39,8 +43,8 @@ class SettingsManager:
 
     def load(self) -> CliSettings:
         """
-        Reads settings from disk. 
-        
+        Reads settings from disk.
+
         Returns:
             CliSettings: The loaded settings object or a default object if loading fails.
         """
@@ -56,7 +60,7 @@ class SettingsManager:
     def save(self, settings: CliSettings) -> None:
         """
         Performs an atomic write of the settings object to the JSON file.
-        
+
         Args:
             settings: The CliSettings instance to persist.
         """
@@ -72,7 +76,7 @@ class SettingsManager:
     def update_mcp_path(self, path: Path) -> None:
         """
         Updates the global MCP configuration path and persists it.
-        
+
         Args:
             path: The Path object pointing to the new MCP config file.
         """

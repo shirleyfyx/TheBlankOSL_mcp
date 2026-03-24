@@ -7,10 +7,15 @@ from .base import BaseLLMClient
 NEBULA_HOST = "http://ece-nebula04.eng.uwaterloo.ca:11434"
 TARGET_MODEL = "qwen3-next:latest"
 
+
 def _format_ollama_error(ex: Exception) -> str:
     """Turn Ollama/Network errors into a short, readable message."""
     msg = str(ex)
-    if "Connection refused" in msg or "NewConnectionError" in msg or "ConnectTimeout" in msg:
+    if (
+        "Connection refused" in msg
+        or "NewConnectionError" in msg
+        or "ConnectTimeout" in msg
+    ):
         return f"Qwen connection failed. Check if Nebula server ({NEBULA_HOST}) is reachable."
     if "not found" in msg.lower():
         return f"Qwen model not found: {TARGET_MODEL}. Check server models."

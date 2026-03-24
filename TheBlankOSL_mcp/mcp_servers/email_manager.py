@@ -10,6 +10,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from email.header import decode_header
+from mcp.server.fastmcp import FastMCP, Context
+from pydantic import BaseModel
 import os
 
 # Load environment variables
@@ -30,6 +32,7 @@ mcp = FastMCP("email_manager")
 @dataclass
 class EmailResult:
     """Result object returned after sending an email."""
+
     success: bool
     message: str
     from_email: str
@@ -41,6 +44,7 @@ class EmailResult:
 @dataclass
 class EmailMessage:
     """Represents an email message."""
+
     id: str
     subject: str
     from_email: str
@@ -62,13 +66,13 @@ def decode_mime_header(header: str) -> str:
     for content, encoding in decoded_parts:
         if isinstance(content, bytes):
             try:
-                result.append(content.decode(encoding or 'utf-8', errors='ignore'))
+                result.append(content.decode(encoding or "utf-8", errors="ignore"))
             except Exception:
-                result.append(content.decode('utf-8', errors='ignore'))
+                result.append(content.decode("utf-8", errors="ignore"))
         else:
             result.append(str(content))
 
-    return ''.join(result)
+    return "".join(result)
 
 
 def extract_email_body(msg: email.message.Message) -> str:
@@ -84,40 +88,56 @@ def extract_email_body(msg: email.message.Message) -> str:
             if content_type == "text/plain" and "attachment" not in content_disposition:
                 try:
                     payload = part.get_payload(decode=True)
-                    charset = part.get_content_charset() or 'utf-8'
-                    body += payload.decode(charset, errors='ignore')
+                    charset = part.get_content_charset() or "utf-8"
+                    body += payload.decode(charset, errors="ignore")
                 except Exception:
                     pass
             # If no plain text, try html
-            elif content_type == "text/html" and not body and "attachment" not in content_disposition:
+            elif (
+                content_type == "text/html"
+                and not body
+                and "attachment" not in content_disposition
+            ):
                 try:
                     payload = part.get_payload(decode=True)
-                    charset = part.get_content_charset() or 'utf-8'
-                    body += payload.decode(charset, errors='ignore')
+                    charset = part.get_content_charset() or "utf-8"
+                    body += payload.decode(charset, errors="ignore")
                 except Exception:
                     pass
     else:
         try:
             payload = msg.get_payload(decode=True)
-            charset = msg.get_content_charset() or 'utf-8'
-            body = payload.decode(charset, errors='ignore')
+            charset = msg.get_content_charset() or "utf-8"
+            body = payload.decode(charset, errors="ignore")
         except Exception:
             body = str(msg.get_payload())
 
     return body.strip()
 
 
+class CustomRequest(BaseModel):
+    method: str
+    params: dict
+
+
+class ElicitationResponse(BaseModel):
+    action: str
+    content: Optional[Dict[str, Any]] = None
+    reason: Optional[str] = None
+
+
 @mcp.tool()
 async def send_email(
-        to_email: str,
-        subject: str,
-        body: str,
-        from_email: Optional[str] = None,
-        smtp_username: Optional[str] = None,
-        smtp_password: Optional[str] = None,
-        smtp_server: Optional[str] = None,
-        smtp_port: Optional[int] = None,
-        attachments: Optional[List[str]] = None
+    to_email: str,
+    subject: str,
+    body: str,
+    from_email: Optional[str] = None,
+    smtp_username: Optional[str] = None,
+    smtp_password: Optional[str] = None,
+    smtp_server: Optional[str] = None,
+    smtp_port: Optional[int] = None,
+    attachments: Optional[List[str]] = None,
+    ctx: Context = None,
 ) -> EmailResult:
     """
     Send an email via SMTP, optionally with attachments.
@@ -132,6 +152,7 @@ async def send_email(
         smtp_server (str, optional): SMTP server hostname. Defaults to environment variable SMTP_SERVER or "smtp.gmail.com".
         smtp_port (int, optional): SMTP server port. Defaults to environment variable SMTP_PORT or 587.
         attachments (List[str], optional): List of local file paths to attach. If a file is missing, email sending fails.
+        ctx (Context, optional): Context object to use. Defaults to None.
 
     Returns:
         EmailResult: Dataclass with the following fields:
@@ -153,14 +174,57 @@ async def send_email(
     sender = from_email or username
 
     if not username or not password:
-        return EmailResult(
-            success=False,
-            message="SMTP credentials not provided",
-            from_email=sender,
-            to_email=to_email,
-            subject=subject,
-            error="Missing SMTP_USERNAME or SMTP_PASSWORD in environment or parameters"
+        if ctx is None:
+            return EmailResult(
+                success=False,
+                message="Credentials missing and context not available.",
+                to_email=to_email,
+                subject=subject,
+                from_email=str(sender),
+            )
+
+        # Pause the tool and ask the client (CLI) to prompt the user
+        response = await ctx.session.send_request(
+            CustomRequest(
+                method="elicitation/create",
+                params={
+                    "mode": "form",
+                    "message": "Please provide your SMTP credentials to send this email.",
+                    "requestedSchema": {
+                        "type": "object",
+                        "properties": {
+                            "smtp_username": {
+                                "type": "string",
+                                "title": "SMTP Username (Email)",
+                            },
+                            "smtp_password": {
+                                "type": "string",
+                                "title": "SMTP App Password",
+                            },
+                        },
+                        "required": ["smtp_username", "smtp_password"],
+                    },
+                },
+            ),
+            ElicitationResponse,
         )
+
+        # 2. Check what the user submitted (using dot notation for Pydantic objects)
+        if response and response.action == "accept" and response.content:
+            username = response.content.get("smtp_username")
+            password = response.content.get("smtp_password")
+            sender = from_email or username
+        else:
+            return EmailResult(
+                success=False,
+                message="User declined to provide credentials.",
+                from_email=str(sender),
+                to_email=to_email,
+                subject=subject,
+                error=response.reason
+                if response and response.reason
+                else "Action cancelled by user.",
+            )
 
     try:
         # Create message
@@ -180,7 +244,7 @@ async def send_email(
                         encoders.encode_base64(part)
                         part.add_header(
                             "Content-Disposition",
-                            f'attachment; filename="{os.path.basename(file_path)}"'
+                            f'attachment; filename="{os.path.basename(file_path)}"',
                         )
                         message.attach(part)
                 else:
@@ -190,7 +254,7 @@ async def send_email(
                         from_email=sender,
                         to_email=to_email,
                         subject=subject,
-                        error="File does not exist"
+                        error="File does not exist",
                     )
 
         # Connect to SMTP server and send email
@@ -204,7 +268,7 @@ async def send_email(
             message=f"Email sent successfully to {to_email}",
             from_email=sender,
             to_email=to_email,
-            subject=subject
+            subject=subject,
         )
 
     except smtplib.SMTPAuthenticationError:
@@ -214,7 +278,7 @@ async def send_email(
             from_email=sender,
             to_email=to_email,
             subject=subject,
-            error="Check your username and password. For Gmail, use an App Password."
+            error="Check your username and password. For Gmail, use an App Password.",
         )
 
     except Exception as e:
@@ -224,18 +288,18 @@ async def send_email(
             from_email=sender,
             to_email=to_email,
             subject=subject,
-            error=f"{type(e).__name__}: {str(e)}"
+            error=f"{type(e).__name__}: {str(e)}",
         )
 
 
 @mcp.tool()
 async def get_inbox_emails(
-        max_emails: int = 10,
-        imap_username: Optional[str] = None,
-        imap_password: Optional[str] = None,
-        imap_server: Optional[str] = None,
-        imap_port: Optional[int] = None,
-        unread_only: bool = False
+    max_emails: int = 10,
+    imap_username: Optional[str] = None,
+    imap_password: Optional[str] = None,
+    imap_server: Optional[str] = None,
+    imap_port: Optional[int] = None,
+    unread_only: bool = False,
 ) -> Dict[str, Any]:
     """
     Retrieve emails from the inbox using IMAP.
@@ -267,7 +331,7 @@ async def get_inbox_emails(
             "message": "IMAP credentials not provided",
             "emails": [],
             "count": 0,
-            "error": "Missing SMTP_USERNAME or SMTP_PASSWORD in environment or parameters"
+            "error": "Missing SMTP_USERNAME or SMTP_PASSWORD in environment or parameters",
         }
 
     try:
@@ -286,7 +350,7 @@ async def get_inbox_emails(
                 "message": "Failed to search inbox",
                 "emails": [],
                 "count": 0,
-                "error": "IMAP search command failed"
+                "error": "IMAP search command failed",
             }
 
         # Get list of email IDs
@@ -306,7 +370,11 @@ async def get_inbox_emails(
                 msg = email.message_from_bytes(raw_email)
 
                 # Extract flags to check if read
-                flags = msg_data[0][0].decode() if isinstance(msg_data[0][0], bytes) else str(msg_data[0][0])
+                flags = (
+                    msg_data[0][0].decode()
+                    if isinstance(msg_data[0][0], bytes)
+                    else str(msg_data[0][0])
+                )
                 is_read = "\\Seen" in flags
 
                 # Parse email details
@@ -326,16 +394,20 @@ async def get_inbox_emails(
                             has_attachments = True
                             break
 
-                emails.append(EmailMessage(
-                    id=email_id.decode(),
-                    subject=subject,
-                    from_email=from_email,
-                    to_email=to_email,
-                    date=date,
-                    body=body[:500] + "..." if len(body) > 500 else body,  # Truncate long bodies
-                    has_attachments=has_attachments,
-                    is_read=is_read
-                ))
+                emails.append(
+                    EmailMessage(
+                        id=email_id.decode(),
+                        subject=subject,
+                        from_email=from_email,
+                        to_email=to_email,
+                        date=date,
+                        body=body[:500] + "..."
+                        if len(body) > 500
+                        else body,  # Truncate long bodies
+                        has_attachments=has_attachments,
+                        is_read=is_read,
+                    )
+                )
             except Exception:
                 # Skip this email if there's an error parsing it
                 continue
@@ -347,7 +419,7 @@ async def get_inbox_emails(
             "success": True,
             "message": f"Retrieved {len(emails)} email(s) from inbox",
             "emails": [vars(e) for e in emails],
-            "count": len(emails)
+            "count": len(emails),
         }
 
     except imaplib.IMAP4.error as e:
@@ -356,7 +428,7 @@ async def get_inbox_emails(
             "message": "IMAP authentication or connection failed",
             "emails": [],
             "count": 0,
-            "error": f"Check your credentials. For Gmail, use an App Password. Error: {str(e)}"
+            "error": f"Check your credentials. For Gmail, use an App Password. Error: {str(e)}",
         }
 
     except Exception as e:
@@ -365,17 +437,17 @@ async def get_inbox_emails(
             "message": "Failed to retrieve emails",
             "emails": [],
             "count": 0,
-            "error": f"{type(e).__name__}: {str(e)}"
+            "error": f"{type(e).__name__}: {str(e)}",
         }
 
 
 @mcp.tool()
 async def get_sent_emails(
-        max_emails: int = 10,
-        imap_username: Optional[str] = None,
-        imap_password: Optional[str] = None,
-        imap_server: Optional[str] = None,
-        imap_port: Optional[int] = None
+    max_emails: int = 10,
+    imap_username: Optional[str] = None,
+    imap_password: Optional[str] = None,
+    imap_server: Optional[str] = None,
+    imap_port: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Retrieve sent emails using IMAP.
@@ -406,7 +478,7 @@ async def get_sent_emails(
             "message": "IMAP credentials not provided",
             "emails": [],
             "count": 0,
-            "error": "Missing SMTP_USERNAME or SMTP_PASSWORD in environment or parameters"
+            "error": "Missing SMTP_USERNAME or SMTP_PASSWORD in environment or parameters",
         }
 
     try:
@@ -415,7 +487,7 @@ async def get_sent_emails(
         mail.login(username, password)
 
         # Try different sent folder names (Gmail uses "[Gmail]/Sent Mail")
-        sent_folders = ['"[Gmail]/Sent Mail"', 'Sent', '"Sent Items"', 'INBOX.Sent']
+        sent_folders = ['"[Gmail]/Sent Mail"', "Sent", '"Sent Items"', "INBOX.Sent"]
         folder_selected = False
 
         for folder in sent_folders:
@@ -433,7 +505,7 @@ async def get_sent_emails(
                 "message": "Could not find sent folder",
                 "emails": [],
                 "count": 0,
-                "error": "Sent folder not found. Tried: " + ", ".join(sent_folders)
+                "error": "Sent folder not found. Tried: " + ", ".join(sent_folders),
             }
 
         # Search for all emails in sent folder
@@ -445,7 +517,7 @@ async def get_sent_emails(
                 "message": "Failed to search sent folder",
                 "emails": [],
                 "count": 0,
-                "error": "IMAP search command failed"
+                "error": "IMAP search command failed",
             }
 
         # Get list of email IDs
@@ -481,16 +553,20 @@ async def get_sent_emails(
                             has_attachments = True
                             break
 
-                emails.append(EmailMessage(
-                    id=email_id.decode(),
-                    subject=subject,
-                    from_email=from_email,
-                    to_email=to_email,
-                    date=date,
-                    body=body[:500] + "..." if len(body) > 500 else body,  # Truncate long bodies
-                    has_attachments=has_attachments,
-                    is_read=True  # Sent emails are always "read"
-                ))
+                emails.append(
+                    EmailMessage(
+                        id=email_id.decode(),
+                        subject=subject,
+                        from_email=from_email,
+                        to_email=to_email,
+                        date=date,
+                        body=body[:500] + "..."
+                        if len(body) > 500
+                        else body,  # Truncate long bodies
+                        has_attachments=has_attachments,
+                        is_read=True,  # Sent emails are always "read"
+                    )
+                )
             except Exception:
                 # Skip this email if there's an error parsing it
                 continue
@@ -502,7 +578,7 @@ async def get_sent_emails(
             "success": True,
             "message": f"Retrieved {len(emails)} sent email(s)",
             "emails": [vars(e) for e in emails],
-            "count": len(emails)
+            "count": len(emails),
         }
 
     except imaplib.IMAP4.error as e:
@@ -511,7 +587,7 @@ async def get_sent_emails(
             "message": "IMAP authentication or connection failed",
             "emails": [],
             "count": 0,
-            "error": f"Check your credentials. For Gmail, use an App Password. Error: {str(e)}"
+            "error": f"Check your credentials. For Gmail, use an App Password. Error: {str(e)}",
         }
 
     except Exception as e:
@@ -520,19 +596,19 @@ async def get_sent_emails(
             "message": "Failed to retrieve sent emails",
             "emails": [],
             "count": 0,
-            "error": f"{type(e).__name__}: {str(e)}"
+            "error": f"{type(e).__name__}: {str(e)}",
         }
 
 
 @mcp.tool()
 async def download_email_attachments(
-        email_id: str,
-        download_dir: str = "./attachments",
-        imap_username: Optional[str] = None,
-        imap_password: Optional[str] = None,
-        imap_server: Optional[str] = None,
-        imap_port: Optional[int] = None,
-        folder: str = "INBOX"
+    email_id: str,
+    download_dir: str = "./attachments",
+    imap_username: Optional[str] = None,
+    imap_password: Optional[str] = None,
+    imap_server: Optional[str] = None,
+    imap_port: Optional[int] = None,
+    folder: str = "INBOX",
 ) -> Dict[str, Any]:
     """
     Download all attachments from a specific email.
@@ -565,7 +641,7 @@ async def download_email_attachments(
             "message": "IMAP credentials not provided",
             "attachments": [],
             "count": 0,
-            "error": "Missing SMTP_USERNAME or SMTP_PASSWORD in environment or parameters"
+            "error": "Missing SMTP_USERNAME or SMTP_PASSWORD in environment or parameters",
         }
 
     try:
@@ -577,7 +653,7 @@ async def download_email_attachments(
         mail.login(username, password)
 
         # Select the appropriate folder
-        if '[' in folder or '/' in folder:
+        if "[" in folder or "/" in folder:
             folder = f'"{folder}"' if not folder.startswith('"') else folder
         status, _ = mail.select(folder)
         if status != "OK":
@@ -586,11 +662,13 @@ async def download_email_attachments(
                 "message": f"Could not select folder: {folder}",
                 "attachments": [],
                 "count": 0,
-                "error": f"Failed to select folder '{folder}'"
+                "error": f"Failed to select folder '{folder}'",
             }
 
         # Fetch the email
-        status, msg_data = mail.fetch(email_id.encode() if isinstance(email_id, str) else email_id, "(RFC822)")
+        status, msg_data = mail.fetch(
+            email_id.encode() if isinstance(email_id, str) else email_id, "(RFC822)"
+        )
 
         if status != "OK":
             return {
@@ -598,7 +676,7 @@ async def download_email_attachments(
                 "message": f"Email with ID {email_id} not found",
                 "attachments": [],
                 "count": 0,
-                "error": "Failed to fetch email"
+                "error": "Failed to fetch email",
             }
 
         # Parse email
@@ -644,12 +722,16 @@ async def download_email_attachments(
                                 f.write(attachment_data)
 
                             file_size = len(attachment_data)
-                            attachments.append({
-                                "filename": filename,
-                                "filepath": filepath,
-                                "size_bytes": file_size,
-                                "size_readable": f"{file_size / 1024:.2f} KB" if file_size < 1024 * 1024 else f"{file_size / (1024 * 1024):.2f} MB"
-                            })
+                            attachments.append(
+                                {
+                                    "filename": filename,
+                                    "filepath": filepath,
+                                    "size_bytes": file_size,
+                                    "size_readable": f"{file_size / 1024:.2f} KB"
+                                    if file_size < 1024 * 1024
+                                    else f"{file_size / (1024 * 1024):.2f} MB",
+                                }
+                            )
 
         mail.close()
         mail.logout()
@@ -659,14 +741,14 @@ async def download_email_attachments(
                 "success": True,
                 "message": "No attachments found in this email",
                 "attachments": [],
-                "count": 0
+                "count": 0,
             }
 
         return {
             "success": True,
             "message": f"Downloaded {len(attachments)} attachment(s) to {download_dir}",
             "attachments": attachments,
-            "count": len(attachments)
+            "count": len(attachments),
         }
 
     except imaplib.IMAP4.error as e:
@@ -675,7 +757,7 @@ async def download_email_attachments(
             "message": "IMAP authentication or connection failed",
             "attachments": [],
             "count": 0,
-            "error": f"Check your credentials. For Gmail, use an App Password. Error: {str(e)}"
+            "error": f"Check your credentials. For Gmail, use an App Password. Error: {str(e)}",
         }
 
     except Exception as e:
@@ -684,7 +766,7 @@ async def download_email_attachments(
             "message": "Failed to download attachments",
             "attachments": [],
             "count": 0,
-            "error": f"{type(e).__name__}: {str(e)}"
+            "error": f"{type(e).__name__}: {str(e)}",
         }
 
 

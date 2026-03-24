@@ -10,6 +10,7 @@ class McpTransport:
     """
     Handles JSON-RPC 2.0 communication over asyncio streams.
     """
+
     def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         self.reader = reader
         self.writer = writer
@@ -22,25 +23,23 @@ class McpTransport:
         """Set handler for incoming server requests (e.g. roots/list, elicitation/create)."""
         self._request_handler = handler
 
-    async def send_request(self, method: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def send_request(
+        self, method: str, params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         Sends a request and awaits the specific response matching the ID.
         """
-        if params is None: params = {}
-        
+        if params is None:
+            params = {}
+
         rid = self._request_id
         self._request_id += 1
-        
+
         # Create a Future to hold the eventual response
         response_future = asyncio.get_event_loop().create_future()
         self._pending_requests[rid] = response_future
 
-        payload = {
-            "jsonrpc": "2.0",
-            "id": rid,
-            "method": method,
-            "params": params
-        }
+        payload = {"jsonrpc": "2.0", "id": rid, "method": method, "params": params}
 
         try:
             data = json.dumps(payload).encode()
@@ -63,7 +62,13 @@ class McpTransport:
         self._send_json({"jsonrpc": "2.0", "id": msg_id, "result": result})
         await self.writer.drain()
 
-    async def send_error(self, msg_id: Any, code: int, message: str, data: Optional[Dict[str, Any]] = None) -> None:
+    async def send_error(
+        self,
+        msg_id: Any,
+        code: int,
+        message: str,
+        data: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """Send a JSON-RPC error response."""
         err = {"code": code, "message": message}
         if data is not None:
@@ -71,17 +76,16 @@ class McpTransport:
         self._send_json({"jsonrpc": "2.0", "id": msg_id, "error": err})
         await self.writer.drain()
 
-    async def send_notification(self, method: str, params: Optional[Dict[str, Any]] = None):
+    async def send_notification(
+        self, method: str, params: Optional[Dict[str, Any]] = None
+    ):
         """
         Sends a notification (no ID, no response expected).
         """
-        if params is None: params = {}
-        
-        payload = {
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params
-        }
+        if params is None:
+            params = {}
+
+        payload = {"jsonrpc": "2.0", "method": method, "params": params}
 
         try:
             data = json.dumps(payload).encode()
@@ -97,16 +101,21 @@ class McpTransport:
         while self._is_running and not self.reader.at_eof():
             try:
                 line = await self.reader.readline()
-                if not line: break
+                if not line:
+                    break
 
                 message = json.loads(line.decode())
 
                 # 1. Handle Responses (Requests we sent)
                 if "id" in message and message["id"] in self._pending_requests:
                     future = self._pending_requests.pop(message["id"])
-                    
+
                     if "error" in message:
-                        future.set_exception(RuntimeError(message["error"].get("message", "Unknown Error")))
+                        future.set_exception(
+                            RuntimeError(
+                                message["error"].get("message", "Unknown Error")
+                            )
+                        )
                     elif "result" in message:
                         future.set_result(message["result"])
                     else:
@@ -125,16 +134,18 @@ class McpTransport:
                             err_msg = str(e)
                             code = getattr(e, "code", -32603)
                             if code == -32603 and (
-                                "not found" in err_msg.lower() or "not supported" in err_msg.lower()
+                                "not found" in err_msg.lower()
+                                or "not supported" in err_msg.lower()
                             ):
                                 code = -32601
                             await self.send_error(msg_id, code, err_msg)
                             await self.writer.drain()
                     else:
                         await self.send_error(
-                            msg_id, -32601,
+                            msg_id,
+                            -32601,
                             f"Method not handled: {method}",
-                            data={"reason": "No request handler registered"}
+                            data={"reason": "No request handler registered"},
                         )
                         await self.writer.drain()
 

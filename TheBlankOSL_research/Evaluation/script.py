@@ -32,7 +32,7 @@ for i in random_indices:
     # Get the input and expected command for the current random index
     nl_input = nl_lines[i].strip()
     expected_command = cm_lines[i].strip()
-    
+
     # Make the API call with the current natural language input
     chat_completion = client.chat.completions.create(
         messages=[
@@ -44,14 +44,14 @@ for i in random_indices:
             {
                 "role": "user",
                 "content": nl_input,
-            }
+            },
         ],
         model="llama3-8b-8192",
     )
 
     # Get the LLM's response
     llm_response = chat_completion.choices[0].message.content.strip()
-    
+
     # Compare the LLM's response with the expected command
     if llm_response == expected_command:
         print(f"Test {i + 1}: Correct")

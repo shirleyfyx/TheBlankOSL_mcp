@@ -16,14 +16,17 @@ PathLike = Union[str, Path]
 # Helpers
 # ---------------------------------------------------------------------
 
+
 def _get_reader(path: Path) -> PdfReader:
     if not path.exists():
         raise FileNotFoundError(f"PDF not found: {path}")
     return PdfReader(str(path))
 
+
 # ---------------------------------------------------------------------
 # PDF Tools
 # ---------------------------------------------------------------------
+
 
 @mcp.tool()
 async def pdf_tools_count_pages(input_path: PathLike) -> int:
@@ -31,7 +34,7 @@ async def pdf_tools_count_pages(input_path: PathLike) -> int:
     Get the total number of pages in a PDF.
     """
     path = Path(input_path).resolve()
-    
+
     def _op():
         reader = _get_reader(path)
         return len(reader.pages)
@@ -41,8 +44,7 @@ async def pdf_tools_count_pages(input_path: PathLike) -> int:
 
 @mcp.tool()
 async def pdf_tools_get_pages_dimension(
-    pdf_path: PathLike, 
-    pages: List[int]
+    pdf_path: PathLike, pages: List[int]
 ) -> List[Tuple[float, float]]:
     """
     Get the width and height of specific pages.
@@ -50,7 +52,7 @@ async def pdf_tools_get_pages_dimension(
     Args:
         pdf_path: Path to the PDF.
         pages: List of **0-based** page indices (e.g., [0, 2] for 1st and 3rd page).
-    
+
     Returns:
         List of (width, height) tuples corresponding to the requested pages.
     """
@@ -61,8 +63,10 @@ async def pdf_tools_get_pages_dimension(
         dimensions = []
         for page_num in pages:
             if page_num < 0 or page_num >= len(reader.pages):
-                raise ValueError(f"Page index {page_num} out of range (0-{len(reader.pages)-1})")
-            
+                raise ValueError(
+                    f"Page index {page_num} out of range (0-{len(reader.pages) - 1})"
+                )
+
             box = reader.pages[page_num].mediabox
             dimensions.append((float(box.width), float(box.height)))
         return dimensions
@@ -72,12 +76,12 @@ async def pdf_tools_get_pages_dimension(
 
 @mcp.tool()
 async def pdf_tools_insert_blank_pages(
-    input_path: PathLike, 
-    num_of_pages: int, 
-    position: int, 
-    width: float, 
-    height: float, 
-    output_path: PathLike
+    input_path: PathLike,
+    num_of_pages: int,
+    position: int,
+    width: float,
+    height: float,
+    output_path: PathLike,
 ) -> str:
     """
     Insert blank pages into a PDF at a specific index.
@@ -94,7 +98,7 @@ async def pdf_tools_insert_blank_pages(
     def _op():
         reader = _get_reader(in_path)
         writer = PdfWriter()
-        
+
         # Determine insertion index
         total_pages = len(reader.pages)
         insert_idx = position
@@ -137,7 +141,7 @@ async def pdf_tools_merge_pages(input_paths: List[str], output_path: str) -> str
         for src in src_paths:
             reader = _get_reader(src)
             writer.append(reader)
-        
+
         with open(out_path, "wb") as f:
             writer.write(f)
         return str(out_path)
@@ -147,9 +151,7 @@ async def pdf_tools_merge_pages(input_paths: List[str], output_path: str) -> str
 
 @mcp.tool()
 async def pdf_tools_split_pages(
-    input_path: PathLike, 
-    pages: List[int], 
-    output_path: PathLike
+    input_path: PathLike, pages: List[int], output_path: PathLike
 ) -> str:
     """
     Extract specific pages to create a new PDF.
@@ -163,7 +165,7 @@ async def pdf_tools_split_pages(
     def _op():
         reader = _get_reader(in_path)
         writer = PdfWriter()
-        
+
         for page_num in pages:
             if 0 <= page_num < len(reader.pages):
                 writer.add_page(reader.pages[page_num])
@@ -178,7 +180,9 @@ async def pdf_tools_split_pages(
 
 
 @mcp.tool()
-async def pdf_tools_reorder_pages(input_path: PathLike, new_order: List[int], output_path: PathLike) -> str:
+async def pdf_tools_reorder_pages(
+    input_path: PathLike, new_order: List[int], output_path: PathLike
+) -> str:
     """
     Create a new PDF by reordering the pages of the input.
 
@@ -193,7 +197,7 @@ async def pdf_tools_reorder_pages(input_path: PathLike, new_order: List[int], ou
     def _op():
         reader = _get_reader(in_path)
         writer = PdfWriter()
-        
+
         for index in new_order:
             if 0 <= index < len(reader.pages):
                 writer.add_page(reader.pages[index])
@@ -209,9 +213,9 @@ async def pdf_tools_reorder_pages(input_path: PathLike, new_order: List[int], ou
 
 @mcp.tool()
 async def pdf_tools_rotate_pages(
-    input_path: PathLike, 
-    pages_and_rotation: List[Tuple[int, int]], 
-    output_path: PathLike
+    input_path: PathLike,
+    pages_and_rotation: List[Tuple[int, int]],
+    output_path: PathLike,
 ) -> str:
     """
     Rotate specific pages in a PDF.
@@ -236,9 +240,9 @@ async def pdf_tools_rotate_pages(
                 # Rotate requires multiples of 90
                 angle = rot_map[i]
                 if angle % 90 != 0:
-                   raise ValueError(f"Rotation angle {angle} must be a multiple of 90")
+                    raise ValueError(f"Rotation angle {angle} must be a multiple of 90")
                 page.rotate(angle)
-            
+
             writer.add_page(page)
 
         with open(out_path, "wb") as f:
@@ -250,15 +254,14 @@ async def pdf_tools_rotate_pages(
 
 @mcp.tool()
 async def pdf_tools_extract_pages_text(
-    pdf_path: PathLike, 
-    pages: List[int]
+    pdf_path: PathLike, pages: List[int]
 ) -> List[str]:
     """
     Extract text content from specific pages.
 
     Args:
         pages: List of **0-based** page indices.
-    
+
     Returns:
         List of strings, where each string is the text of a requested page.
     """
@@ -277,19 +280,20 @@ async def pdf_tools_extract_pages_text(
 
     return await anyio.to_thread.run_sync(_op)
 
+
 @mcp.tool()
 async def pdf_tools_add_text_to_page(
-    input_path: PathLike, 
-    text: List[str], 
-    position: Tuple[float, float], 
-    font: str, 
-    font_size: int, 
-    page_num: int, 
-    output_path: PathLike
+    input_path: PathLike,
+    text: List[str],
+    position: Tuple[float, float],
+    font: str,
+    font_size: int,
+    page_num: int,
+    output_path: PathLike,
 ) -> str:
     """
     Add text to a specific page.
-    
+
     Args:
         text: List of strings. Each item starts on a new line.
               Text automatically wraps if it hits the right edge of the page.
@@ -306,7 +310,7 @@ async def pdf_tools_add_text_to_page(
         reader = _get_reader(in_path)
         if page_num < 0 or page_num >= len(reader.pages):
             raise ValueError(f"Page {page_num} out of bounds.")
-            
+
         page = reader.pages[page_num]
         page_width = float(page.mediabox.width)
         page_height = float(page.mediabox.height)
@@ -314,36 +318,36 @@ async def pdf_tools_add_text_to_page(
         # 2. Create a temporary PDF "stamp" in memory using ReportLab
         packet = io.BytesIO()
         c = canvas.Canvas(packet, pagesize=(page_width, page_height))
-        
+
         # Setup Font
         c.setFont(font, font_size)
-        
+
         # Calculate available width (assuming 20px right margin)
         max_width = page_width - x_start - 20
-        
+
         current_y = y_start
         line_height = font_size * 1.2
 
         # 3. Draw text with wrapping
         from reportlab.lib.utils import simpleSplit
 
-        # Coordinate system note: PDF Y starts at bottom. 
-        # If user assumes Y starts at top, we might need logic here. 
+        # Coordinate system note: PDF Y starts at bottom.
+        # If user assumes Y starts at top, we might need logic here.
         # Standard PDF = (0,0) at bottom-left.
-        
+
         for paragraph in text:
             # Wrap text if it exceeds width
             wrapped_lines = simpleSplit(paragraph, font, font_size, max_width)
-            
+
             for line in wrapped_lines:
                 # Check if we ran off the bottom of the page
                 if current_y < 0:
-                    break 
+                    break
                 c.drawString(x_start, current_y, line)
                 current_y -= line_height  # Move down
-            
+
             # Extra gap between paragraphs
-            current_y -= (line_height * 0.5)
+            current_y -= line_height * 0.5
 
         c.save()
         packet.seek(0)
@@ -351,9 +355,9 @@ async def pdf_tools_add_text_to_page(
         # 4. Merge the stamp onto the original page
         stamp_pdf = PdfReader(packet)
         stamp_page = stamp_pdf.pages[0]
-        
+
         writer = PdfWriter()
-        
+
         # Copy all pages, merging the stamp only on the specific page
         for i, original_page in enumerate(reader.pages):
             if i == page_num:
@@ -363,7 +367,7 @@ async def pdf_tools_add_text_to_page(
         # 5. Write output
         with open(out_path, "wb") as f:
             writer.write(f)
-            
+
         return str(out_path)
 
     return await anyio.to_thread.run_sync(_op)
@@ -371,13 +375,13 @@ async def pdf_tools_add_text_to_page(
 
 @mcp.tool()
 async def pdf_tools_add_image_to_page(
-    input_path: PathLike, 
-    image_path: PathLike, 
-    position: Tuple[float, float], 
-    page_num: int, 
+    input_path: PathLike,
+    image_path: PathLike,
+    position: Tuple[float, float],
+    page_num: int,
     width: float,
     height: float,
-    output_path: PathLike
+    output_path: PathLike,
 ) -> str:
     """
     Overlay an image onto a specific pdf page with optional resizing.
@@ -404,7 +408,7 @@ async def pdf_tools_add_image_to_page(
         reader = _get_reader(in_path)
         if page_num < 0 or page_num >= len(reader.pages):
             raise ValueError(f"Page {page_num} out of bounds.")
-        
+
         page = reader.pages[page_num]
         page_width = float(page.mediabox.width)
         page_height = float(page.mediabox.height)
@@ -412,20 +416,20 @@ async def pdf_tools_add_image_to_page(
         # 2. Create the image stamp
         packet = io.BytesIO()
         c = canvas.Canvas(packet, pagesize=(page_width, page_height))
-        
+
         # ReportLab's drawImage accepts width and height.
         # If they are None, it uses the image's original size (at 72 DPI).
         # We also use mask='auto' to support transparent PNGs.
         c.drawImage(
-            str(img_path), 
-            x, 
-            y, 
-            width=width, 
-            height=height, 
-            mask='auto',
-            preserveAspectRatio=True # Good practice if only one dim provided
-        ) 
-        
+            str(img_path),
+            x,
+            y,
+            width=width,
+            height=height,
+            mask="auto",
+            preserveAspectRatio=True,  # Good practice if only one dim provided
+        )
+
         c.save()
         packet.seek(0)
 
@@ -447,11 +451,12 @@ async def pdf_tools_add_image_to_page(
 
     return await anyio.to_thread.run_sync(_op)
 
+
 @mcp.tool()
 async def pdf_tools_extract_forms(input_path: PathLike) -> Dict[str, Any]:
     """
     Extract form field data from a PDF.
-    
+
     Args:
         input_path: Path to the source PDF.
         output_path: Optional path to save the extracted schema as a JSON file.
@@ -469,9 +474,9 @@ async def pdf_tools_extract_forms(input_path: PathLike) -> Dict[str, Any]:
         for field_name, field_data in fields.items():
             # '/V' is the standard key for the value in PDF AcroForms
             # '/T' is the type, if needed
-            current_value = field_data.get('/V', None)
+            current_value = field_data.get("/V", None)
             extracted_data[field_name] = current_value
-        
+
         return extracted_data
 
     return await anyio.to_thread.run_sync(_op)
@@ -479,13 +484,11 @@ async def pdf_tools_extract_forms(input_path: PathLike) -> Dict[str, Any]:
 
 @mcp.tool()
 async def pdf_tools_fill_forms(
-    input_path: PathLike, 
-    form_data: Dict[str, Any], 
-    output_path: PathLike
+    input_path: PathLike, form_data: Dict[str, Any], output_path: PathLike
 ) -> str:
     """
     Fill a PDF form with provided data.
-    
+
     Args:
         input_path: Path to the source PDF with empty form fields.
         form_data: Dictionary where keys match PDF field names and values are the content to fill.
@@ -502,14 +505,14 @@ async def pdf_tools_fill_forms(
         writer.append_pages_from_reader(reader)
 
         # --- FIX START: Explicitly copy the global AcroForm dictionary ---
-        # This fixes the "No /AcroForm dictionary" error by manually linking 
+        # This fixes the "No /AcroForm dictionary" error by manually linking
         # the form definitions from the reader to the writer.
         if "/AcroForm" in reader.root_object:
             # We must verify the writer has a root object (it usually does after adding pages)
             # and then manually inject the AcroForm key.
-            writer.root_object.update({
-                NameObject("/AcroForm"): reader.root_object["/AcroForm"]
-            })
+            writer.root_object.update(
+                {NameObject("/AcroForm"): reader.root_object["/AcroForm"]}
+            )
         # --- FIX END ---
 
         # 2. Update form fields
@@ -520,10 +523,11 @@ async def pdf_tools_fill_forms(
         # 3. Write output
         with open(out_path, "wb") as f:
             writer.write(f)
-            
+
         return str(out_path)
 
     return await anyio.to_thread.run_sync(_op)
 
+
 if __name__ == "__main__":
-    mcp.run(transport='stdio')
+    mcp.run(transport="stdio")

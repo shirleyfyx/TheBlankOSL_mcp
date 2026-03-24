@@ -12,6 +12,7 @@ class McpServer:
     """
     Manages a single server's process, transport, and lifecycle.
     """
+
     def __init__(self, name: str, config: McpServerConfig):
         self.name = name
         self.config = config
@@ -41,7 +42,7 @@ class McpServer:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=env
+                env=env,
             )
             self.process = process
         except FileNotFoundError:
@@ -82,15 +83,18 @@ class McpServer:
             raise RuntimeError("Transport not connected")
 
         # A. Send capabilities (roots, elicitation, sampling per MCP client-concepts)
-        response = await transport.send_request("initialize", {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {
-                "roots": {"listChanged": True},
-                "elicitation": {"form": {}, "url": {}},
-                "sampling": {"tools": {}}
+        response = await transport.send_request(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "roots": {"listChanged": True},
+                    "elicitation": {"form": {}, "url": {}},
+                    "sampling": {"tools": {}},
+                },
+                "clientInfo": {"name": "blankosl_cli", "version": "0.1.0"},
             },
-            "clientInfo": {"name": "blankosl_cli", "version": "0.1.0"}
-        })
+        )
         self.capabilities = response.get("capabilities", {})
 
         # B. Notify initialized
@@ -103,7 +107,9 @@ class McpServer:
                 line = await stderr.readline()
                 if not line:
                     break
-                self._stderr_buffer.append(line.decode('utf-8', errors='replace').rstrip())
+                self._stderr_buffer.append(
+                    line.decode("utf-8", errors="replace").rstrip()
+                )
         except Exception:
             pass  # Process may have terminated
 
@@ -111,7 +117,11 @@ class McpServer:
         """Get a summary of stderr output."""
         if not self._stderr_buffer:
             return ""
-        lines = self._stderr_buffer[-max_lines:] if len(self._stderr_buffer) > max_lines else self._stderr_buffer
+        lines = (
+            self._stderr_buffer[-max_lines:]
+            if len(self._stderr_buffer) > max_lines
+            else self._stderr_buffer
+        )
         return "\n".join(lines)
 
     async def list_tools(self) -> List[Dict[str, Any]]:
@@ -120,9 +130,9 @@ class McpServer:
         transport = self.transport
         if not transport:
             raise RuntimeError(f"Server {self.name} is not connected.")
-        
+
         response = await transport.send_request("tools/list", {})
-        
+
         # Ensure correct type return
         tools = response.get("tools", [])
         if isinstance(tools, list):
@@ -135,11 +145,10 @@ class McpServer:
         transport = self.transport
         if not transport:
             raise RuntimeError(f"Server {self.name} is not connected.")
-            
-        response = await transport.send_request("tools/call", {
-            "name": tool_name,
-            "arguments": arguments
-        })
+
+        response = await transport.send_request(
+            "tools/call", {"name": tool_name, "arguments": arguments}
+        )
         return response
 
     async def stop(self):
@@ -159,7 +168,7 @@ class McpServer:
                 await self._stderr_task
             except asyncio.CancelledError:
                 pass
-        
+
         # 3. Close pipes
         transport = self.transport
         if transport:

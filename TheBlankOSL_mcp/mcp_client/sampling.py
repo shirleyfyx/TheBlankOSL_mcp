@@ -20,12 +20,14 @@ def format_tools_list_for_llm(tools: List[Dict[str, Any]]) -> str:
         props = schema.get("properties") or {}
         required = schema.get("required") or []
         args_hint = ", ".join(
-            f'{k}{" (required)" if k in required else " (optional)"}' for k in props.keys()
+            f"{k}{' (required)' if k in required else ' (optional)'}"
+            for k in props.keys()
         )
         if not args_hint:
             args_hint = "no arguments"
         lines.append(f"- {name}: {desc}. Arguments: {args_hint}")
     return "\n".join(lines)
+
 
 SYSTEM_PROMPT_TEMPLATE = """You are a helpful assistant with access to MCP (Model Context Protocol) tools. You MUST use these tools when the user asks for something the tools can do—do not refuse or reply with only text when a tool can perform the action.
 When the user's request matches any tool below, respond with one or more tool call blocks (no other text). Each block on its own:
@@ -61,11 +63,14 @@ async def build_tools_context(manager: McpManager) -> str:
             props = schema.get("properties") or {}
             required = schema.get("required") or []
             args_hint = ", ".join(
-                f'{k}{" (required)" if k in required else " (optional)"}' for k in props.keys()
+                f"{k}{' (required)' if k in required else ' (optional)'}"
+                for k in props.keys()
             )
             if not args_hint:
                 args_hint = "no arguments"
-            lines.append(f"- {name} [server: {server_name}]: {desc}. Arguments: {args_hint}")
+            lines.append(
+                f"- {name} [server: {server_name}]: {desc}. Arguments: {args_hint}"
+            )
     if not lines:
         return ""
     return "\n".join(lines)
@@ -104,7 +109,9 @@ def parse_tool_calls_from_response(response: str) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     if TOOL_CALL_START in response and TOOL_CALL_END in response:
         pattern = re.compile(
-            re.escape(TOOL_CALL_START) + r"\s*\n?\s*([\s\S]*?)\s*\n?\s*" + re.escape(TOOL_CALL_END),
+            re.escape(TOOL_CALL_START)
+            + r"\s*\n?\s*([\s\S]*?)\s*\n?\s*"
+            + re.escape(TOOL_CALL_END),
             re.DOTALL,
         )
         for match in pattern.finditer(response):
@@ -125,7 +132,11 @@ def strip_tool_call_blocks(response: str) -> str:
         return ""
     if TOOL_CALL_START in response and TOOL_CALL_END in response:
         pattern = re.compile(
-            r"\s*" + re.escape(TOOL_CALL_START) + r".*?" + re.escape(TOOL_CALL_END) + r"\s*",
+            r"\s*"
+            + re.escape(TOOL_CALL_START)
+            + r".*?"
+            + re.escape(TOOL_CALL_END)
+            + r"\s*",
             re.DOTALL,
         )
         out = pattern.sub("", response).strip()
@@ -155,9 +166,7 @@ async def run_sampling_turn(
         end=TOOL_CALL_END,
         tools_list=tools_context,
     )
-    user_content = (
-        f"[Use MCP tools when the request matches. Respond with TOOL_CALL block(s) if any tool above can fulfill this; otherwise reply in text.]\n\n{user_message}"
-    )
+    user_content = f"[Use MCP tools when the request matches. Respond with TOOL_CALL block(s) if any tool above can fulfill this; otherwise reply in text.]\n\n{user_message}"
     messages = [
         {"role": "system", "content": system_content},
         *chat_history,

@@ -14,6 +14,7 @@ mcp = FastMCP("task-scheduler")
 
 Command = Union[str, List[str]]
 
+
 @dataclass
 class Task:
     id: str
@@ -32,11 +33,14 @@ class Task:
     cwd: Optional[str] = None
     env: Optional[Dict[str, str]] = None
 
+
 TASKS: Dict[str, Task] = {}
 NAME_INDEX: Dict[str, str] = {}  # name -> id
 
+
 def _now_utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
 
 def _secs_left(task: Task) -> int:
     if task.done or task.cancelled:
@@ -44,7 +48,10 @@ def _secs_left(task: Task) -> int:
     remain = int(round(task.end_monotonic - time.monotonic()))
     return max(0, remain)
 
-def _exec_command(cmd: Command, cwd: Optional[str], env: Optional[Dict[str, str]]) -> Dict[str, Any]:
+
+def _exec_command(
+    cmd: Command, cwd: Optional[str], env: Optional[Dict[str, str]]
+) -> Dict[str, Any]:
     """
     Execute a command. If cmd is a string -> shell=True. If list -> shell=False.
     Returns a dict with returncode/stdout/stderr.
@@ -52,22 +59,31 @@ def _exec_command(cmd: Command, cwd: Optional[str], env: Optional[Dict[str, str]
     try:
         if isinstance(cmd, str):
             proc = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True,
-                cwd=cwd, env=(os.environ | env) if env else None
+                cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                env=(os.environ | env) if env else None,
             )
         else:
             proc = subprocess.run(
-                cmd, shell=False, capture_output=True, text=True,
-                cwd=cwd, env=(os.environ | env) if env else None
+                cmd,
+                shell=False,
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                env=(os.environ | env) if env else None,
             )
         return {
             "ok": proc.returncode == 0,
             "returncode": proc.returncode,
             "stdout": proc.stdout,
-            "stderr": proc.stderr
+            "stderr": proc.stderr,
         }
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
 
 def _on_fire(task_id: str):
     task = TASKS.get(task_id)
@@ -81,24 +97,36 @@ def _on_fire(task_id: str):
         result = _exec_command(task.command, task.cwd, task.env)
 
     # Always log an event so the client sees what happened
-    print(json.dumps({
-        "event": "task_fired",
-        "id": task.id,
-        "name": task.name,
-        "fired_at": _now_utc_iso(),
-        "message": task.message,
-        "command": task.command,
-        "cwd": task.cwd,
-        "result": result
-    }))
+    print(
+        json.dumps(
+            {
+                "event": "task_fired",
+                "id": task.id,
+                "name": task.name,
+                "fired_at": _now_utc_iso(),
+                "message": task.message,
+                "command": task.command,
+                "cwd": task.cwd,
+                "result": result,
+            }
+        )
+    )
+
 
 @mcp.tool()
 def schedule_in(name: str, message: str, delay_seconds: int) -> Dict[str, Any]:
     """
     Schedule a simple one-shot reminder (no command).
     """
-    return _schedule_core(name=name, message=message, delay_seconds=delay_seconds,
-                          command=None, cwd=None, env=None)
+    return _schedule_core(
+        name=name,
+        message=message,
+        delay_seconds=delay_seconds,
+        command=None,
+        cwd=None,
+        env=None,
+    )
+
 
 @mcp.tool()
 def schedule_in_command(
@@ -106,15 +134,22 @@ def schedule_in_command(
     delay_seconds: int,
     command: Command,
     cwd: Optional[str] = None,
-    env: Optional[Dict[str, str]] = None
+    env: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """
     Schedule a one-shot task that executes 'command' when the countdown ends.
     - If 'command' is a string, it runs with shell=True (convenient but riskier).
     - If it's a list, it runs with shell=False (safer): e.g. ["bash","-lc","echo hi"].
     """
-    return _schedule_core(name=name, message=f"Run command: {command}",
-                          delay_seconds=delay_seconds, command=command, cwd=cwd, env=env)
+    return _schedule_core(
+        name=name,
+        message=f"Run command: {command}",
+        delay_seconds=delay_seconds,
+        command=command,
+        cwd=cwd,
+        env=env,
+    )
+
 
 def _schedule_core(
     name: str,
@@ -122,7 +157,7 @@ def _schedule_core(
     delay_seconds: int,
     command: Optional[Command],
     cwd: Optional[str],
-    env: Optional[Dict[str, str]]
+    env: Optional[Dict[str, str]],
 ) -> Dict[str, Any]:
     if delay_seconds <= 0:
         return {"error": "delay_seconds must be > 0"}
@@ -150,7 +185,7 @@ def _schedule_core(
         timer=t,
         command=command,
         cwd=cwd,
-        env=env
+        env=env,
     )
     TASKS[task_id] = task
     NAME_INDEX[name] = task_id
@@ -164,8 +199,9 @@ def _schedule_core(
         "eta_utc": task.end_time_utc,
         "has_command": command is not None,
         "command": command,
-        "cwd": cwd
+        "cwd": cwd,
     }
+
 
 @mcp.tool()
 def countdown_status(task_id: str) -> Dict[str, Any]:
@@ -183,8 +219,9 @@ def countdown_status(task_id: str) -> Dict[str, Any]:
         "done": task.done,
         "has_command": task.command is not None,
         "command": task.command,
-        "cwd": task.cwd
+        "cwd": task.cwd,
     }
+
 
 @mcp.tool()
 def cancel(id_or_name: str) -> Dict[str, Any]:
@@ -207,27 +244,31 @@ def cancel(id_or_name: str) -> Dict[str, Any]:
         "id": task.id,
         "name": task.name,
         "cancelled": task.cancelled,
-        "done": task.done
+        "done": task.done,
     }
+
 
 @mcp.tool()
 def list_tasks() -> Dict[str, Any]:
     out = []
     for t in TASKS.values():
-        out.append({
-            "id": t.id,
-            "name": t.name,
-            "seconds_left": _secs_left(t),
-            "total_seconds": t.delay_seconds,
-            "started_at": t.start_time_utc,
-            "eta_utc": t.end_time_utc,
-            "cancelled": t.cancelled,
-            "done": t.done,
-            "has_command": t.command is not None,
-            "command": t.command,
-            "cwd": t.cwd
-        })
+        out.append(
+            {
+                "id": t.id,
+                "name": t.name,
+                "seconds_left": _secs_left(t),
+                "total_seconds": t.delay_seconds,
+                "started_at": t.start_time_utc,
+                "eta_utc": t.end_time_utc,
+                "cancelled": t.cancelled,
+                "done": t.done,
+                "has_command": t.command is not None,
+                "command": t.command,
+                "cwd": t.cwd,
+            }
+        )
     return {"tasks": out}
+
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")

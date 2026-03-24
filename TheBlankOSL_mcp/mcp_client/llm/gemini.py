@@ -23,6 +23,7 @@ def _format_gemini_error(ex: Exception) -> str:
         return f"Gemini request error: {msg[:200]}"
     return f"[Gemini error: {msg[:300]}]"
 
+
 def _get_api_key(api_key: str | None) -> str:
     """Require API key from caller (CLI config). Raises if missing."""
     if not api_key or not api_key.strip():
@@ -46,12 +47,15 @@ def _messages_to_sdk_history(messages: list[dict[str, Any]]) -> list[types.Conte
         role = m.get("role", "user")
         content = (m.get("content") or "").strip()
         if role == "system":
-            out.append(types.Content(role="user", parts=[_make_part(f"[System] {content}")]))
+            out.append(
+                types.Content(role="user", parts=[_make_part(f"[System] {content}")])
+            )
         elif role == "user":
             out.append(types.Content(role="user", parts=[_make_part(content)]))
         elif role == "assistant":
             out.append(types.Content(role="model", parts=[_make_part(content)]))
     return out
+
 
 def _response_text(response: Any) -> str:
     """Extract reply text from generate_content response."""
@@ -61,9 +65,17 @@ def _response_text(response: Any) -> str:
         return (response.text or "[No response from model]").strip()
     except (ValueError, AttributeError):
         parts_list = getattr(response, "candidates", None) or []
-        if parts_list and hasattr(parts_list[0], "content") and parts_list[0].content.parts:
-            return (getattr(parts_list[0].content.parts[0], "text", "") or "[No response from model]").strip()
+        if (
+            parts_list
+            and hasattr(parts_list[0], "content")
+            and parts_list[0].content.parts
+        ):
+            return (
+                getattr(parts_list[0].content.parts[0], "text", "")
+                or "[No response from model]"
+            ).strip()
         return "[No response from model]"
+
 
 class GeminiClient(BaseLLMClient):
     """LLM client using Google Gemini API. Uses SDK ChatSession to keep chat history."""

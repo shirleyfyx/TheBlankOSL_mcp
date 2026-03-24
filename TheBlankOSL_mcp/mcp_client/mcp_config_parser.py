@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List
 
+
 @dataclass
 class McpServerConfig:
     command: str
@@ -15,7 +16,10 @@ class McpServerConfig:
         """Expands ~ and $VAR in command, args, and env values."""
         self.command = os.path.expandvars(os.path.expanduser(self.command))
         self.args = [os.path.expandvars(os.path.expanduser(a)) for a in self.args]
-        self.env = {k: os.path.expandvars(os.path.expanduser(v)) for k, v in self.env.items()}
+        self.env = {
+            k: os.path.expandvars(os.path.expanduser(v)) for k, v in self.env.items()
+        }
+
 
 @dataclass
 class McpConfig:
@@ -33,7 +37,7 @@ class McpConfig:
         if not path_obj.exists():
             raise FileNotFoundError(f"Config file not found: {path}")
 
-        with open(path_obj, 'r', encoding="utf-8") as f:
+        with open(path_obj, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         # Expect top-level key "mcpServers"
@@ -44,19 +48,23 @@ class McpConfig:
         if isinstance(roots_data, list):
             for r in roots_data:
                 if isinstance(r, dict) and r.get("uri"):
-                    config.roots.append({"uri": str(r["uri"]), "name": str(r.get("name", ""))})
+                    config.roots.append(
+                        {"uri": str(r["uri"]), "name": str(r.get("name", ""))}
+                    )
 
         for name, s_data in servers_data.items():
             # Validate required fields
             if "command" not in s_data:
-                raise ValueError(f"Server '{name}' is missing required field: 'command'")
+                raise ValueError(
+                    f"Server '{name}' is missing required field: 'command'"
+                )
 
             # Create object
             server = McpServerConfig(
                 command=s_data["command"],
                 args=s_data.get("args", []),
                 env=s_data.get("env", {}),
-                enabled=s_data.get("enabled", True)
+                enabled=s_data.get("enabled", True),
             )
 
             # Expand variables immediately upon load
@@ -73,11 +81,11 @@ class McpConfig:
                     "command": s.command,
                     "args": s.args,
                     "env": s.env,
-                    "enabled": s.enabled
+                    "enabled": s.enabled,
                 }
                 for name, s in self.servers.items()
             },
             "roots": self.roots,
         }
-        with open(path, 'w', encoding="utf-8") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(output, f, indent=4)
