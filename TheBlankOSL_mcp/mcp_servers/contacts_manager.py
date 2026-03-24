@@ -9,6 +9,7 @@ mcp = FastMCP("contacts")
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "contacts.sqlite3"
 
+
 async def init_db() -> None:
     """
     Initialize the SQLite database and create tables if they don't exist.
@@ -39,8 +40,12 @@ async def init_db() -> None:
         if "notes" not in cols:
             await db.execute("ALTER TABLE contacts ADD COLUMN notes TEXT;")
 
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);")
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_contacts_age ON contacts(age);")
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_contacts_age ON contacts(age);"
+        )
         await db.commit()
 
 
@@ -189,8 +194,9 @@ async def update_contact(
             "age": row[5],
             "address": row[6],
             "notes": row[7],
-        }
+        },
     }
+
 
 @mcp.tool()
 async def delete_contact(contact_id: int) -> dict:
@@ -205,6 +211,7 @@ async def delete_contact(contact_id: int) -> dict:
             return {"ok": False, "error": f"No contact found with id={contact_id}"}
 
     return {"ok": True}
+
 
 @mcp.tool()
 async def clear_contact_fields(

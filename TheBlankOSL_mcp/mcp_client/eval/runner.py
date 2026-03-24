@@ -18,7 +18,12 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from mcp_client.eval.models import EvalDataset, EvalTestCase, EvalType, ExpectedTrajectoryItem
+from mcp_client.eval.models import (
+    EvalDataset,
+    EvalTestCase,
+    EvalType,
+    ExpectedTrajectoryItem,
+)
 
 app = typer.Typer(
     help="Run the MCP evaluation suite.",
@@ -70,8 +75,7 @@ def compare_arguments(expected: Dict[str, Any], actual: Dict[str, Any]) -> bool:
 
 
 def grade_trajectory(
-    test_case: EvalTestCase,
-    actual_tool_calls: List[Tuple[str, Dict[str, Any]]]
+    test_case: EvalTestCase, actual_tool_calls: List[Tuple[str, Dict[str, Any]]]
 ) -> Tuple[bool, str]:
     """
     Compares the list of (tool_name, arguments) returned by the LLM
@@ -86,20 +90,32 @@ def grade_trajectory(
     if test_case.eval_type == EvalType.NO_TOOLS_CALLED:
         if len(actual) == 0:
             return True, "Passed: No tools were called as expected."
-        return False, f"Failed: Expected 0 tools, but {len(actual)} were called ({[t[0] for t in actual]})."
+        return (
+            False,
+            f"Failed: Expected 0 tools, but {len(actual)} were called ({[t[0] for t in actual]}).",
+        )
 
     # 2. EXACT_MATCH
     if test_case.eval_type == EvalType.EXACT_MATCH:
         if len(actual) != len(expected):
-            return False, f"Failed: Expected {len(expected)} tool calls, got {len(actual)}."
+            return (
+                False,
+                f"Failed: Expected {len(expected)} tool calls, got {len(actual)}.",
+            )
 
         for i, (exp, act) in enumerate(zip(expected, actual)):
             act_name, act_args = act
             if exp.tool_name != act_name:
-                return False, f"Failed at step {i+1}: Expected tool '{exp.tool_name}', got '{act_name}'."
+                return (
+                    False,
+                    f"Failed at step {i + 1}: Expected tool '{exp.tool_name}', got '{act_name}'.",
+                )
 
             if exp.arguments and not compare_arguments(exp.arguments, act_args):
-                return False, f"Failed at step {i+1}: Args mismatch. Expected {exp.arguments}, got {act_args}."
+                return (
+                    False,
+                    f"Failed at step {i + 1}: Args mismatch. Expected {exp.arguments}, got {act_args}.",
+                )
 
         return True, "Passed: Exact match on tools and arguments."
 
@@ -114,7 +130,10 @@ def grade_trajectory(
                         match_found = True
                         break
             if not match_found:
-                return False, f"Failed: Expected tool '{exp.tool_name}' with args {exp.arguments} was not found in actual calls."
+                return (
+                    False,
+                    f"Failed: Expected tool '{exp.tool_name}' with args {exp.arguments} was not found in actual calls.",
+                )
             matched_expected.append(True)
 
         if len(matched_expected) == len(expected):
@@ -123,13 +142,14 @@ def grade_trajectory(
     return False, f"Unknown evaluation type: {test_case.eval_type}"
 
 
-async def run_evaluation(
-    dataset_path: Path,
-    model_name: str
-) -> None:
+async def run_evaluation(dataset_path: Path, model_name: str) -> None:
     """Orchestrates the evaluation run."""
 
-    console.print(Panel(f"Running MCP Evaluation Suite\n[dim]Dataset: {dataset_path}\nModel: {model_name}[/dim]"))
+    console.print(
+        Panel(
+            f"Running MCP Evaluation Suite\n[dim]Dataset: {dataset_path}\nModel: {model_name}[/dim]"
+        )
+    )
 
     # 1. Load Dataset
     dataset = load_dataset(dataset_path)
@@ -142,12 +162,16 @@ async def run_evaluation(
 
     # 3. Run Test Cases
     for case in dataset.cases:
-        console.print(f"▶️  [bold cyan]Running {case.id}[/bold cyan] [dim]({case.category})[/dim]")
+        console.print(
+            f"▶️  [bold cyan]Running {case.id}[/bold cyan] [dim]({case.category})[/dim]"
+        )
 
         # Tools are now provided directly inline in the mock dataset
         available_tools = case.available_tools
         if not available_tools and case.eval_type != EvalType.NO_TOOLS_CALLED:
-             console.print("  [yellow]WARNING: No available mock tools provided in test case.[/yellow]")
+            console.print(
+                "  [yellow]WARNING: No available mock tools provided in test case.[/yellow]"
+            )
 
         # Execute LLM step
         try:
@@ -164,47 +188,56 @@ async def run_evaluation(
 
                     # Basic mapping of our arbitrary schema to the GenAI SDK
                     if "input_schema" in tool and "properties" in tool["input_schema"]:
-                        for prop_name, prop_details in tool["input_schema"]["properties"].items():
+                        for prop_name, prop_details in tool["input_schema"][
+                            "properties"
+                        ].items():
                             prop_type = prop_details.get("type", "string").upper()
                             if prop_type == "NUMBER":
-                                prop_type = "ARRAY" if prop_details.get('items') else "NUMBER" # simplify mapping
+                                prop_type = (
+                                    "ARRAY" if prop_details.get("items") else "NUMBER"
+                                )  # simplify mapping
 
                             properties[prop_name] = types.Schema(
                                 type=getattr(types.Type, prop_type, types.Type.STRING),
-                                description=prop_details.get("description", "")
+                                description=prop_details.get("description", ""),
                             )
                         required = tool["input_schema"].get("required", [])
 
                     sdk_tool = types.Tool(
                         function_declarations=[
                             types.FunctionDeclaration(
-                                name=tool["name"].replace(".", "_"), # SDK doesn't like dots in names
+                                name=tool["name"].replace(
+                                    ".", "_"
+                                ),  # SDK doesn't like dots in names
                                 description=tool.get("description", ""),
                                 parameters=types.Schema(
                                     type=types.Type.OBJECT,
                                     properties=properties,
-                                    required=required
-                                ) if properties else None
+                                    required=required,
+                                )
+                                if properties
+                                else None,
                             )
                         ]
                     )
                     sdk_tools.append(sdk_tool)
 
             config = types.GenerateContentConfig(
-                tools=sdk_tools if sdk_tools else None,
-                temperature=0.0
+                tools=sdk_tools if sdk_tools else None, temperature=0.0
             )
 
             response = client.models.generate_content(
-                model=model_name,
-                contents=case.user_prompt,
-                config=config
+                model=model_name, contents=case.user_prompt, config=config
             )
 
             # Extract actual tool calls
             actual_calls = []
 
-            if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+            if (
+                response.candidates
+                and response.candidates[0].content
+                and response.candidates[0].content.parts
+            ):
                 for part in response.candidates[0].content.parts:
                     if part.function_call:
                         # Restore original name (dot notation) if possible
@@ -215,11 +248,27 @@ async def run_evaluation(
                                 original_name = t["name"]
                                 break
 
-                        actual_calls.append((original_name, dict(part.function_call.args if part.function_call.args else {})))
+                        actual_calls.append(
+                            (
+                                original_name,
+                                dict(
+                                    part.function_call.args
+                                    if part.function_call.args
+                                    else {}
+                                ),
+                            )
+                        )
 
             # Grade
             passed, reason = grade_trajectory(case, actual_calls)
-            results.append({"case": case, "passed": passed, "reason": reason, "actual": actual_calls})
+            results.append(
+                {
+                    "case": case,
+                    "passed": passed,
+                    "reason": reason,
+                    "actual": actual_calls,
+                }
+            )
 
             if passed:
                 console.print(f"  ✅ [green]{reason}[/green]")
@@ -230,10 +279,12 @@ async def run_evaluation(
 
         except Exception as e:
             console.print(f"  ❌ [red]Error during LLM execution:[/red] {e}")
-            results.append({"case": case, "passed": False, "reason": str(e), "actual": []})
+            results.append(
+                {"case": case, "passed": False, "reason": str(e), "actual": []}
+            )
 
     # 4. Print Summary Report
-    console.print("\n" + "="*50)
+    console.print("\n" + "=" * 50)
     console.print("[bold]Evaluation Summary[/bold]")
 
     passed_count = sum(1 for r in results if r["passed"])
@@ -251,24 +302,29 @@ async def run_evaluation(
     console.print(table)
 
     score_color = "green" if passed_count == total else "yellow"
-    console.print(f"\nFinal Score: [{score_color}]{passed_count}/{total}[/{score_color}] passed.")
+    console.print(
+        f"\nFinal Score: [{score_color}]{passed_count}/{total}[/{score_color}] passed."
+    )
 
 
 @app.callback(invoke_without_command=True)
 def main(
     dataset: Path = typer.Option(
         Path("TheBlankOSL_mcp/mcp_client/eval/dataset.yaml"),
-        "--dataset", "-d",
-        help="Path to the evaluation dataset."
+        "--dataset",
+        "-d",
+        help="Path to the evaluation dataset.",
     ),
     model: str = typer.Option(
         "gemini-2.5-flash",
-        "--model", "-m",
-        help="The Gemini model to use for evaluation."
-    )
+        "--model",
+        "-m",
+        help="The Gemini model to use for evaluation.",
+    ),
 ) -> None:
     """Run the evaluation framework against mock tools provided in the dataset."""
     import asyncio
+
     asyncio.run(run_evaluation(dataset, model))
 
 

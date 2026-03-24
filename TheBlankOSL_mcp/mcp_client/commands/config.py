@@ -8,6 +8,7 @@ from ..utils import console, load_mcp_config, settings_mgr
 
 app = typer.Typer(help="Manage MCP server configuration.", rich_markup_mode="rich")
 
+
 # --- REUSABLE LOGIC ---
 def set_mcp_path_logic(mcp_path: Path):
     """
@@ -21,6 +22,7 @@ def set_mcp_path_logic(mcp_path: Path):
     console.print(f"[green]Global MCP config path updated to:[/green] {mcp_path}")
     return True
 
+
 def show_config_logic():
     """
     Loads and displays the current CLI settings and MCP server status.
@@ -28,8 +30,12 @@ def show_config_logic():
     # 1. Global CLI Settings
     settings = settings_mgr.load()
     settings_dict = asdict(settings)
-    
-    table_settings = Table(title="[bold blue]CLI Global Settings[/bold blue]", show_header=True, header_style="bold cyan")
+
+    table_settings = Table(
+        title="[bold blue]CLI Global Settings[/bold blue]",
+        show_header=True,
+        header_style="bold cyan",
+    )
     table_settings.add_column("Setting")
     table_settings.add_column("Value")
 
@@ -40,7 +46,7 @@ def show_config_logic():
         else:
             display_value = str(value) if value is not None else "[dim]Not Set[/dim]"
         table_settings.add_row(key, display_value)
-        
+
     console.print(table_settings)
     console.print()  # Spacer
 
@@ -55,7 +61,9 @@ def show_config_logic():
         console.print("[yellow]No MCP servers configured.[/yellow]")
         return
 
-    table_servers = Table(title="MCP Servers", show_header=True, header_style="bold blue")
+    table_servers = Table(
+        title="MCP Servers", show_header=True, header_style="bold blue"
+    )
     table_servers.add_column("Server", style="cyan")
     table_servers.add_column("Command")
     table_servers.add_column("Status", justify="center")
@@ -65,13 +73,14 @@ def show_config_logic():
             status = "[dim]disabled[/dim]"
         else:
             status = "[green]enabled[/green]"
-            
+
         table_servers.add_row(name, server.command, status)
 
     console.print(table_servers)
 
 
 # --- CLI WRAPPER ---
+
 
 @app.callback(invoke_without_command=True)
 def main(
@@ -94,7 +103,7 @@ def main(
     """
     if ctx.invoked_subcommand is not None:
         return
-    
+
     # 1. Action: Update global path
     if mcp_path:
         success = set_mcp_path_logic(mcp_path)
