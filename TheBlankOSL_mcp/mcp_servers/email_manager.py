@@ -166,11 +166,11 @@ async def send_email(
     Raises:
         None: Errors are captured and returned in the EmailResult object instead of raising exceptions.
     """
-    # Use defaults from environment if not provided
-    username = smtp_username or DEFAULT_SMTP_USERNAME
-    password = smtp_password or DEFAULT_SMTP_PASSWORD
-    server = smtp_server or DEFAULT_SMTP_SERVER
-    port = smtp_port or DEFAULT_SMTP_PORT
+    # Use defaults from live environment if not provided
+    username = smtp_username or os.environ.get("SMTP_USERNAME") or DEFAULT_SMTP_USERNAME
+    password = smtp_password or os.environ.get("SMTP_PASSWORD") or DEFAULT_SMTP_PASSWORD
+    server = smtp_server or os.environ.get("SMTP_SERVER") or DEFAULT_SMTP_SERVER
+    port = smtp_port or os.environ.get("SMTP_PORT") or DEFAULT_SMTP_PORT
     sender = from_email or username
 
     if not username or not password:
@@ -214,6 +214,10 @@ async def send_email(
             username = response.content.get("smtp_username")
             password = response.content.get("smtp_password")
             sender = from_email or username
+            os.environ["SMTP_USERNAME"] = username
+            os.environ["SMTP_PASSWORD"] = password
+            with open(".env", "a") as f:
+                f.write(f"\nSMTP_USERNAME={username}\nSMTP_PASSWORD={password}\n")
         else:
             return EmailResult(
                 success=False,
