@@ -10,7 +10,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from email.header import decode_header
-from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.fastmcp import Context
 from pydantic import BaseModel
 import os
 
