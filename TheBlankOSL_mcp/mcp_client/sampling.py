@@ -1,76 +1,85 @@
 import json
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .mcp_manager import McpManager
 
 TOOL_CALL_START = "TOOL_CALL"
 TOOL_CALL_END = "END_TOOL_CALL"
 
+# Bound context size: long tool descriptions and chat history dominate token use.
+DEFAULT_TOOL_DESC_MAX = 160
+DEFAULT_SAMPLING_HISTORY_MAX_MESSAGES = 22
 
-def format_tools_list_for_llm(tools: List[Dict[str, Any]]) -> str:
+
+def truncate_text(text: str, max_len: int, ellipsis: str = "…") -> str:
+    text = (text or "").strip()
+    if max_len <= 0 or len(text) <= max_len:
+        return text
+    return text[: max_len - len(ellipsis)].rstrip() + ellipsis
+
+
+def compact_tool_line(
+    tool: Dict[str, Any],
+    *,
+    server_label: Optional[str] = None,
+    desc_max: int = DEFAULT_TOOL_DESC_MAX,
+) -> str:
+    """One-line tool summary: name(arg* = required), truncated description."""
+    name = tool.get("name", "unknown")
+    desc = (tool.get("description") or "").strip() or "—"
+    desc = truncate_text(desc, desc_max)
+    schema = tool.get("inputSchema") or {}
+    props = schema.get("properties") or {}
+    required = set(schema.get("required") or [])
+    if not props:
+        args_hint = "∅"
+    else:
+        args_hint = ", ".join(f"{k}*" if k in required else k for k in props.keys())
+    prefix = f"{server_label}:" if server_label else ""
+    return f"- {prefix}{name}({args_hint}) {desc}"
+
+
+def format_tools_list_for_llm(
+    tools: List[Dict[str, Any]], *, desc_max: int = DEFAULT_TOOL_DESC_MAX
+) -> str:
     """Format spec-style tools array (name, description, inputSchema) into a string for the LLM."""
     if not tools:
         return ""
-    lines: List[str] = []
-    for tool in tools:
-        name = tool.get("name", "unknown")
-        desc = (tool.get("description") or "").strip() or "No description."
-        schema = tool.get("inputSchema") or {}
-        props = schema.get("properties") or {}
-        required = schema.get("required") or []
-        args_hint = ", ".join(
-            f"{k}{' (required)' if k in required else ' (optional)'}"
-            for k in props.keys()
-        )
-        if not args_hint:
-            args_hint = "no arguments"
-        lines.append(f"- {name}: {desc}. Arguments: {args_hint}")
-    return "\n".join(lines)
+    return "\n".join(compact_tool_line(t, desc_max=desc_max) for t in tools)
 
 
-SYSTEM_PROMPT_TEMPLATE = """You are a helpful assistant with access to MCP (Model Context Protocol) tools. You MUST use these tools when the user asks for something the tools can do—do not refuse or reply with only text when a tool can perform the action.
-When the user's request matches any tool below, respond with one or more tool call blocks (no other text). Each block on its own:
+def trim_chat_messages(
+    messages: List[Dict[str, str]], max_messages: int = DEFAULT_SAMPLING_HISTORY_MAX_MESSAGES
+) -> List[Dict[str, str]]:
+    """Keep only the last N messages to cap prompt growth on long sessions."""
+    if max_messages <= 0 or len(messages) <= max_messages:
+        return list(messages)
+    return list(messages[-max_messages:])
+
+
+SYSTEM_PROMPT_TEMPLATE = """You use MCP tools via TOOL_CALL blocks. When a listed tool fits the request, output only block(s) below—no "I can't" if a tool applies.
 
 {start}
-{{"name": "<tool_name>", "arguments": {{ ... }}}}
+{{"name": "<exact_name>", "arguments": {{}}}}
 {end}
 
-RULE: If the user asks for weather, files, contacts, alerts, or to save/write something, and a tool below can do it, you MUST output the corresponding TOOL_CALL block(s). Do not say "I cannot" or give only a text answer when a tool exists for the request.
+Rules: Multi-step → multiple blocks; fetch data (e.g. weather) before email/other tools that need it. Fetch-then-save: first call only the fetch tool; after you see results, call write_file with real content—never placeholder text in the same turn as fetch. Cities → get_forecast_for_city when available. Paths → ~/Desktop/ or ~/Downloads/. add_contact: include all user-given fields. Coords: approximate lat/lon if only get_forecast exists. No matching tool → plain text only (no TOOL_CALL).
 
-IMPORTANT - Multiple actions: If the user asks for MORE THAN ONE thing (e.g. "send an email AND tell me the weather", "email X and include the weather for SF"), you MUST output MULTIPLE TOOL_CALL blocks—one per action. Put the block that fetches data first (e.g. get_forecast_for_city) before the block that uses it (e.g. send_email). Example: user says "email John with the weather in SF" -> output first TOOL_CALL get_forecast_for_city with location "San Francisco", then second TOOL_CALL for the email tool with recipient and a body that mentions including the weather (you can write the body text; the actual weather will be filled in when tools run in order).
-CRITICAL - Saving fetched data to a file: If the user asks to fetch something AND save it (e.g. "get weather for X and save to my desktop"), do NOT output write_file in the same turn as the fetch. You do not have the fetched content yet. Output ONLY the tool(s) that fetch the data (e.g. get_forecast_for_city). You will receive the result in a follow-up step; then output write_file with the actual fetched content as the "content" argument. So: first turn = get_forecast_for_city only; after you see the forecast result, next turn = write_file with path "~/Desktop/..." and content = that forecast text.
-Use the exact "name" from the list. For "arguments", use a JSON object matching the tool's schema (use {{}} if none needed).
-For tools that need latitude/longitude (e.g. get_forecast), use approximate coordinates when the user gives a city name. Prefer get_forecast_for_city(location) when the user names a city.
-For add_contact: include every field the user provides (name, address, phone, email, etc.).
-For saving to the user's Downloads or Desktop: use path "~/Downloads/filename" or "~/Desktop/filename" (the ~ expands to the user's home). Do NOT guess paths like /root/Desktop—use ~ so it works on any system. Or call get_home_directory first, then in a follow-up use write_file with path "<home>/Desktop/filename".
-If the request does not match any tool, respond with normal helpful text and do NOT output any tool call block.
-
-Available MCP tools:
+Tools:
 {tools_list}
 """
 
 
 async def build_tools_context(manager: McpManager) -> str:
-    """Build a string description of all MCP tools for the LLM (text-based fallback)."""
+    """Build a compact string of all MCP tools for the LLM."""
     all_tools = await manager.get_all_tools()
     lines: List[str] = []
+    multi_server = len([n for n, t in all_tools.items() if t]) > 1
     for server_name, tools in all_tools.items():
+        label = server_name if multi_server else None
         for tool in tools:
-            name = tool.get("name", "unknown")
-            desc = (tool.get("description") or "").strip() or "No description."
-            schema = tool.get("inputSchema") or {}
-            props = schema.get("properties") or {}
-            required = schema.get("required") or []
-            args_hint = ", ".join(
-                f"{k}{' (required)' if k in required else ' (optional)'}"
-                for k in props.keys()
-            )
-            if not args_hint:
-                args_hint = "no arguments"
-            lines.append(
-                f"- {name} [server: {server_name}]: {desc}. Arguments: {args_hint}"
-            )
+            lines.append(compact_tool_line(tool, server_label=label))
     if not lines:
         return ""
     return "\n".join(lines)
@@ -152,6 +161,8 @@ async def run_sampling_turn(
     chat_history: List[Dict[str, str]],
     user_message: str,
     tools_context: str,
+    *,
+    max_history_messages: int = DEFAULT_SAMPLING_HISTORY_MAX_MESSAGES,
 ) -> Tuple[str, List[Dict[str, Any]]]:
     """
     One sampling turn: send user message + tools to LLM. Returns (reply_text, list of tool_calls).
@@ -166,11 +177,11 @@ async def run_sampling_turn(
         end=TOOL_CALL_END,
         tools_list=tools_context,
     )
-    user_content = f"[Use MCP tools when the request matches. Respond with TOOL_CALL block(s) if any tool above can fulfill this; otherwise reply in text.]\n\n{user_message}"
+    prior = trim_chat_messages(chat_history, max_history_messages)
     messages = [
         {"role": "system", "content": system_content},
-        *chat_history,
-        {"role": "user", "content": user_content},
+        *prior,
+        {"role": "user", "content": user_message},
     ]
     reply = await client.chat(messages)
     tool_calls = parse_tool_calls_from_response(reply)

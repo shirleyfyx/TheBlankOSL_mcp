@@ -19,7 +19,7 @@ from .commands import config as config_cmd
 from .commands import tools as tools_cmd
 from .commands.call import main as call_main
 from .llm import get_client, list_backends, get_backend_name
-from .sampling import build_tools_context, run_sampling_turn
+from .sampling import build_tools_context, run_sampling_turn, trim_chat_messages
 
 # Import reusable logic from subcommands
 from .commands.tools import list_tools_logic, info_tool_logic
@@ -470,15 +470,14 @@ async def interactive_session():
 
                             if results_summary:
                                 summary_ctx = "\n\n".join(results_summary)
-                                hist = list(chat_history) + [
-                                    {"role": "user", "content": user_message},
-                                    {
-                                        "role": "assistant",
-                                        "content": "(I ran the requested tools.)",
-                                    },
+                                hist = trim_chat_messages(chat_history) + [
                                     {
                                         "role": "user",
-                                        "content": f"The user asked: {user_message}\n\nTool results:\n{summary_ctx}\n\nReply in 1–3 short sentences summarizing what was done and the main result for the user. Use the actual tool result text in your reply; do not use any placeholder syntax (e.g. {{...}}). No tool calls.",
+                                        "content": (
+                                            f"Tool results:\n{summary_ctx}\n\n"
+                                            "Reply in 1–3 short sentences. Use values from results; "
+                                            "no {{...}} placeholders. No tool calls."
+                                        ),
                                     },
                                 ]
                                 with console.status("[dim]Summarizing...[/dim]"):
@@ -508,10 +507,9 @@ async def interactive_session():
                                 chain_msg = (
                                     "Tool results from previous step:\n"
                                     + "\n".join(results_summary)
-                                    + f"\n\nOriginal request: {user_message}\n\n"
-                                    "If the user's request needs more tool calls (e.g. send_email, or write_file to save content), output one or more TOOL_CALL blocks now. "
-                                    'For write_file to Desktop or Downloads always use path "~/Desktop/filename" or "~/Downloads/filename" (never /root/Desktop). '
-                                    "Otherwise do not output any TOOL_CALL."
+                                    + f"\n\nUser request: {user_message}\n"
+                                    "Need more tools (e.g. send_email, write_file)? Output TOOL_CALL block(s). "
+                                    "write_file → ~/Desktop/ or ~/Downloads/ only. Else plain text, no TOOL_CALL."
                                 )
                                 with console.status(
                                     "[dim]Checking for follow-up actions...[/dim]"
@@ -642,15 +640,13 @@ async def interactive_session():
                                                 )
                                         if chain_results:
                                             chain_ctx = "\n\n".join(chain_results)
-                                            hist2 = list(chat_history) + [
-                                                {"role": "user", "content": chain_msg},
-                                                {
-                                                    "role": "assistant",
-                                                    "content": "(Ran follow-up tools.)",
-                                                },
+                                            hist2 = trim_chat_messages(chat_history) + [
                                                 {
                                                     "role": "user",
-                                                    "content": f"Follow-up tool results:\n{chain_ctx}\n\nReply in 1–2 sentences for the user. Use the actual tool result text; do not use any placeholder syntax (e.g. {{...}}). No tool calls.",
+                                                    "content": (
+                                                        f"Follow-up tool results:\n{chain_ctx}\n\n"
+                                                        "1–2 sentences for the user. No placeholders. No tool calls."
+                                                    ),
                                                 },
                                             ]
                                             with console.status(
@@ -677,7 +673,7 @@ async def interactive_session():
                     # No tools: plain LLM reply only
                     chat_history.append({"role": "user", "content": user_message})
                     with console.status("[dim]Thinking...[/dim]"):
-                        reply = await client.chat(chat_history)
+                        reply = await client.chat(trim_chat_messages(chat_history))
                     chat_history.append({"role": "assistant", "content": reply})
                     console.print(reply)
 

@@ -24,6 +24,10 @@ class UserRejectedError(Exception):
     code = -1
 
 
+# Cap embedded tool output when a server sends huge payloads through sampling (saves tokens).
+_MAX_SAMPLING_TOOL_TEXT = 12_000
+
+
 class McpManager:
     """
     High-level orchestrator.
@@ -163,7 +167,10 @@ class McpManager:
             if kind == "tool_use":
                 name = content.get("name", "")
                 inp = content.get("input", {})
-                return f"[Tool use id={content.get('id', '')}]: {name}({inp})"
+                inp_s = json.dumps(inp, default=str) if inp else "{}"
+                if len(inp_s) > 4_000:
+                    inp_s = inp_s[:4_000] + "…"
+                return f"[Tool use id={content.get('id', '')}]: {name}({inp_s})"
             if kind == "tool_result":
                 tid = content.get("toolUseId", "")
                 parts = content.get("content", [])
@@ -172,7 +179,13 @@ class McpManager:
                     for p in parts
                     if isinstance(p, dict) and p.get("type") == "text"
                 ]
-                return f"[Tool result id={tid}]: " + " ".join(texts)
+                body = " ".join(texts)
+                if len(body) > _MAX_SAMPLING_TOOL_TEXT:
+                    body = (
+                        body[:_MAX_SAMPLING_TOOL_TEXT]
+                        + "\n…[truncated for context limit]"
+                    )
+                return f"[Tool result id={tid}]: {body}"
             if kind == "image":
                 return "[image]"
             if kind == "audio":

@@ -27,7 +27,6 @@ def _resolve_path(path: PathLike) -> Path:
 # File and directory operations
 # ----------------------------
 
-
 @mcp.tool()
 async def exists(path: PathLike) -> bool:
     """Check if a path exists.
@@ -66,7 +65,6 @@ async def is_dir(path: PathLike) -> bool:
     """
     return _resolve_path(path).is_dir()
 
-
 @mcp.tool()
 async def read_file(path: PathLike, encoding: str = "utf-8") -> str:
     """Read the contents of a file asynchronously.
@@ -80,7 +78,6 @@ async def read_file(path: PathLike, encoding: str = "utf-8") -> str:
     """
     async with aiofiles.open(_resolve_path(path), mode="r", encoding=encoding) as f:
         return await f.read()
-
 
 @mcp.tool()
 async def write_file(path: PathLike, content: str, encoding: str = "utf-8") -> str:
@@ -98,7 +95,6 @@ async def write_file(path: PathLike, content: str, encoding: str = "utf-8") -> s
     async with aiofiles.open(resolved, mode="w", encoding=encoding) as f:
         await f.write(content)
     return str(resolved)
-
 
 @mcp.tool()
 async def append_file(path: PathLike, content: str, encoding: str = "utf-8") -> None:
@@ -213,12 +209,9 @@ async def touch(path: PathLike) -> None:
     """
     await anyio.to_thread.run_sync(_resolve_path(path).touch)
 
-
-"""
+'''
 Supplementary tools to help guiding LLM identifying the OS information.
-"""
-
-
+'''
 @mcp.tool()
 async def get_home_directory() -> str:
     """Return the path of the current user's home directory.
@@ -227,7 +220,6 @@ async def get_home_directory() -> str:
         str: Absolute path to the home directory.
     """
     return os.path.expanduser("~")
-
 
 @mcp.tool()
 async def get_os() -> str:
@@ -238,11 +230,10 @@ async def get_os() -> str:
     """
     return platform.system()
 
-
 @mcp.tool()
 async def get_temporary_directory_auto() -> str:
     """
-    Creates a temporary directory that is automatically cleaned up
+    Creates a temporary directory that is automatically cleaned up 
     when the Python process ends or the object is garbage collected.
 
     Returns:
@@ -250,7 +241,6 @@ async def get_temporary_directory_auto() -> str:
     """
     temp_dir_obj = tempfile.TemporaryDirectory()
     return temp_dir_obj.name
-
 
 @mcp.tool()
 async def search_files(
@@ -262,7 +252,7 @@ async def search_files(
     max_size: int = None,
     modified_after: str = None,
     modified_before: str = None,
-    case_insensitive: bool = False,
+    case_insensitive: bool = False
 ) -> List[str]:
     """
     Perform a deep search for files based on combined criteria (grep + find).
@@ -295,12 +285,8 @@ async def search_files(
             raise ValueError(f"Invalid regex pattern: {e}")
 
     # Parse dates if provided
-    ts_after = (
-        datetime.fromisoformat(modified_after).timestamp() if modified_after else None
-    )
-    ts_before = (
-        datetime.fromisoformat(modified_before).timestamp() if modified_before else None
-    )
+    ts_after = datetime.fromisoformat(modified_after).timestamp() if modified_after else None
+    ts_before = datetime.fromisoformat(modified_before).timestamp() if modified_before else None
 
     def _matches_criteria(path: Path) -> bool:
         # 1. Filter by Name Pattern
@@ -309,14 +295,14 @@ async def search_files(
         if case_insensitive:
             name_to_check = name_to_check.lower()
             pattern_to_check = pattern_to_check.lower()
-
+            
         if not fnmatch(name_to_check, pattern_to_check):
             return False
 
         # 2. Filter by Extension
         if extension:
             # Normalize extension format (ensure dot prefix)
-            target_ext = extension if extension.startswith(".") else f".{extension}"
+            target_ext = extension if extension.startswith('.') else f'.{extension}'
             if case_insensitive:
                 if path.suffix.lower() != target_ext.lower():
                     return False
@@ -328,7 +314,7 @@ async def search_files(
         try:
             stat = path.stat()
         except OSError:
-            return False  # Skip files we can't access
+            return False # Skip files we can't access
 
         # 3. Filter by Size
         if min_size is not None and stat.st_size < min_size:
@@ -347,24 +333,24 @@ async def search_files(
     def _matches_content(path: Path) -> bool:
         """Checks if file content matches the regex pattern."""
         if not regex:
-            return True  # No content search requested
-
+            return True # No content search requested
+            
         # Skip binary files based on mime guessing to save time/errors
         mime_type, _ = mimetypes.guess_type(path)
-        if mime_type and not mime_type.startswith("text"):
+        if mime_type and not mime_type.startswith('text'):
             # If strictly binary (like images), skip grep
             return False
 
         try:
             # Open with error handling for encoding issues
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
                 # Read line by line to avoid loading massive files into RAM
                 for line in f:
                     if regex.search(line):
                         return True
         except (OSError, UnicodeDecodeError):
             return False
-
+            
         return False
 
     def _search_op():
@@ -381,7 +367,6 @@ async def search_files(
     # Run blocking I/O in a thread
     return await anyio.to_thread.run_sync(_search_op)
 
-
 if __name__ == "__main__":
     # Initialize and run the server
-    mcp.run(transport="stdio")
+    mcp.run(transport='stdio')
