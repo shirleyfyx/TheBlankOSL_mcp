@@ -19,31 +19,3 @@ The Blank Operating System Layer is a user interface that makes operating system
 and control more expressive and intuitive. It consists of a large language model, a single client, and
 multiple servers that communicate through the Model Context Protocol, with each message written in
 JavaScript Object Notation format.
-The large language model can be provided by an existing system such as ChatGPT, Google
-Gemini, or a self-hosted local model.
-Each server is responsible for a specific group of related functions. In the Blank OSL, these
-servers are categorized into three primary sets. Local file system manipulation servers handle
-operations such as searching, reading, and writing files including .txt, .pdf, .zip. System process
-manager servers allow the system to spawn or terminate processes, inspect process attributes such as
-CPU usage, memory usage, and process identifiers, or schedule a process to spawn at a specific time.
-Miscellaneous component servers handle common queries, such as retrieving weather reports,
-searching Wikipedia, and accessing other online services like emails. Unlike the local file system
-servers and the process manager servers, the miscellaneous components servers have no strict bounds
-on the functionalities as it is more like additional feature plugins. Every server exposes the purpose of
-its available functions, along with parameter types and return values, in a format that follows the
-Model Context Protocol standard. This design restricts the large language model to these specific
-functions, and any invalid function calls or parameters are rejected by the server.
-The client provides a terminal-style interface that allows the user to issue tasks in natural
-language through typing in the text entry or using the speech-to-text feature. When a task is submitted,
-the client forwards it to the large language model, which interprets the user’s intent and converts it
-into a single Model Context Protocol message. If the task cannot be performed based on the available
-servers, the large language model rejects it and returns an error. If the task is ambiguous, such as
-creating a temporary file, the large language model may ask for additional details, including the file’s
-name, type, and lifetime in a conversation dialog. Once the client receives the message from the large
-language model, it displays the task details, including the operation to perform, generated parameters,
-required permissions, and server dependencies, on a dialog, for the user to review. The user can type
-yes to continue or no to cancel. If the user chooses to continue, the client sends the message to the
-appropriate server, which executes the task.
-Third-party applications with Model Context Protocol library installed, can interact with the
-client through its exposed application interface. For instance, it may directly send a task to the client
-as if the user types in the text entry.
