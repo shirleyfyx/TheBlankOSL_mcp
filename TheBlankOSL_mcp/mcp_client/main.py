@@ -19,7 +19,7 @@ from .commands import config as config_cmd
 from .commands import tools as tools_cmd
 from .commands.call import main as call_main
 from .llm import get_client, list_backends, get_backend_name
-from .sampling import build_tools_context, run_sampling_turn, trim_chat_messages
+from .sampling import build_tools_context, run_sampling_turn, trim_chat_messages, trim_chat_messages
 
 # Import reusable logic from subcommands
 from .commands.tools import list_tools_logic, info_tool_logic
